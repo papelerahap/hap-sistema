@@ -4,7 +4,7 @@ const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 10000;
 
 const SUPABASE_URL = 'https://qfrmfwtgnjzlawhhwmnp.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_deCqDep8bLWg7H34xlfalA_Z8euE7q4';

@@ -1249,7 +1249,7 @@ function cerrarSesion(){
 // Guardar contraseña en config
 // ===== FIN ROLES =====
 
-const API = 'https://hap-sistema.onrender.com';
+const API = ''; // misma dirección desde la que se abrió la página
 let guardandoEnServidor = false;
 
 function cargar() {

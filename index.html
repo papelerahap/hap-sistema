@@ -109,6 +109,7 @@ tbody tr:hover td { background: var(--bg); }
 .filtro-l.active { background: #3B6D11; border-color: #3B6D11; color: #fff; }
 .filtro-e.active { background: #854F0B; border-color: #854F0B; color: #fff; }
 .filtro-n.active { background: #6b6a66; border-color: #6b6a66; color: #fff; }
+.filtro-x.active { background: #0F766E; border-color: #0F766E; color: #fff; }
 
 /* AUTOCOMPLETE */
 .ac-wrap { position: relative; }
@@ -336,6 +337,7 @@ tbody tr:hover td { background: var(--bg); }
         <button class="filtro-btn filtro-g" onclick="setFiltroCliente('G',this)">Gloria (G)</button>
         <button class="filtro-btn filtro-l" onclick="setFiltroCliente('L',this)">Luis (L)</button>
         <button class="filtro-btn filtro-e" onclick="setFiltroCliente('E',this)">Edgardo (E)</button>
+        <span class="filtro-extra" data-fn="setFiltroCliente" style="display:contents"></span>
         <button class="filtro-btn filtro-n" onclick="setFiltroCliente('SIN',this)">Sin asignar</button>
         <span id="clientes-count" style="font-size:12px;color:var(--text3);margin-left:4px"></span>
       </div>
@@ -360,6 +362,7 @@ tbody tr:hover td { background: var(--bg); }
         <button class="filtro-btn filtro-g" onclick="setFiltroPres('G',this)">Gloria (G)</button>
         <button class="filtro-btn filtro-l" onclick="setFiltroPres('L',this)">Luis (L)</button>
         <button class="filtro-btn filtro-e" onclick="setFiltroPres('E',this)">Edgardo (E)</button>
+        <span class="filtro-extra" data-fn="setFiltroPres" style="display:contents"></span>
         <button class="filtro-btn filtro-n" onclick="setFiltroPres('SIN',this)">Sin asignar</button>
         <span id="pres-count" style="font-size:12px;color:var(--text3);margin-left:4px"></span>
       </div>
@@ -387,6 +390,7 @@ tbody tr:hover td { background: var(--bg); }
         <button class="filtro-btn filtro-g" onclick="setFiltroDeudor('G',this)">Gloria (G)</button>
         <button class="filtro-btn filtro-l" onclick="setFiltroDeudor('L',this)">Luis (L)</button>
         <button class="filtro-btn filtro-e" onclick="setFiltroDeudor('E',this)">Edgardo (E)</button>
+        <span class="filtro-extra" data-fn="setFiltroDeudor" style="display:contents"></span>
         <button class="filtro-btn filtro-n" onclick="setFiltroDeudor('SIN',this)">Sin asignar</button>
       </div>
       <div class="card">
@@ -491,6 +495,7 @@ tbody tr:hover td { background: var(--bg); }
         <button class="filtro-btn filtro-g" onclick="setFiltroAfavor('G',this)">Gloria (G)</button>
         <button class="filtro-btn filtro-l" onclick="setFiltroAfavor('L',this)">Luis (L)</button>
         <button class="filtro-btn filtro-e" onclick="setFiltroAfavor('E',this)">Edgardo (E)</button>
+        <span class="filtro-extra" data-fn="setFiltroAfavor" style="display:contents"></span>
         <button class="filtro-btn filtro-n" onclick="setFiltroAfavor('SIN',this)">Sin asignar</button>
       </div>
       <div class="card">
@@ -977,8 +982,9 @@ tbody tr:hover td { background: var(--bg); }
       <span style="flex:1"></span>
       <span style="font-size:13px;color:var(--text2)"><strong id="lc-count">0</strong> clientes marcados</span>
     </div>
-    <div id="lc-lista" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px"></div>
+    <div id="lc-lista" style="max-height:min(340px,35vh);overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px"></div>
     <div class="modal-footer">
+      <button class="btn btn-danger" style="margin-right:auto" onclick="lcEliminar()">🗑 Eliminar lista</button>
       <button class="btn" onclick="cerrarModales()">Cancelar</button>
       <button class="btn btn-primary" onclick="lcGuardar()">Guardar</button>
     </div>
@@ -1427,12 +1433,13 @@ function setFiltroCliente(cod, el){
   renderClientes();
 }
 function renderClientes(){
+  renderFiltrosListas();
   const q=(document.getElementById('search-clientes')?.value||'').toLowerCase();
   const lista=db.clientes.filter((c,i)=>{
     const matchTexto=!q||c.nombre.toLowerCase().includes(q)||(c.codigo||'').toLowerCase().includes(q)||(c.dir||'').toLowerCase().includes(q);
     const matchCod = filtroCodCliente==='' ? true
       : filtroCodCliente==='SIN' ? !c.codigo
-      : (c.codigo||'').toUpperCase()===filtroCodCliente;
+      : (String(filtroCodCliente).indexOf('LISTA:')===0 ? c.lista_precio===filtroCodCliente.slice(6) : (c.codigo||'').toUpperCase()===filtroCodCliente);
     return matchTexto && matchCod;
   });
   const t=document.getElementById('tabla-clientes');
@@ -1817,6 +1824,42 @@ function listasArmarCabecera(){
   s3.innerHTML = '<option value="">en blanco</option>' + LISTAS_COLS.map(function(n, c){ return '<option value="' + c + '">' + n + '</option>'; }).join('');
   if(v3 !== '' && parseInt(v3, 10) < LISTAS_COLS.length) s3.value = v3;
 }
+var LISTAS_FIJAS = ['General', 'Gloria', 'Luis', 'Edgardo'];
+function clienteEnLista(cli, nombreLista){
+  if(!cli) return false;
+  var real = db.clientes.find(function(x){ return x.nombre === cli.nombre; });
+  return !!real && real.lista_precio === nombreLista;
+}
+// Botones de filtro para las listas nuevas, al lado de Gloria / Luis / Edgardo
+function renderFiltrosListas(){
+  var extra = listasNombres().filter(function(n){ return LISTAS_FIJAS.indexOf(n) === -1; });
+  var vars = { setFiltroCliente: filtroCodCliente, setFiltroPres: filtroPresupuesto, setFiltroDeudor: filtroCodDeudor, setFiltroAfavor: filtroAfavor };
+  Array.prototype.slice.call(document.querySelectorAll('.filtro-extra')).forEach(function(sp){
+    var fn = sp.getAttribute('data-fn');
+    var actual = vars[fn] || '';
+    if(actual.indexOf('LISTA:') === 0 && extra.indexOf(actual.slice(6)) === -1){
+      // la lista elegida ya no existe: volver a Todos
+      if(fn === 'setFiltroCliente') filtroCodCliente = '';
+      else if(fn === 'setFiltroPres') filtroPresupuesto = '';
+      else if(fn === 'setFiltroDeudor') filtroCodDeudor = '';
+      else if(fn === 'setFiltroAfavor') filtroAfavor = '';
+      actual = '';
+      var bs = sp.parentElement.querySelectorAll('.filtro-btn');
+      for(var i = 0; i < bs.length; i++) bs[i].classList.remove('active');
+      if(bs.length) bs[0].classList.add('active');
+    }
+    sp.innerHTML = extra.map(function(n){
+      var on = actual === 'LISTA:' + n;
+      return '<button class="filtro-btn filtro-x' + (on ? ' active' : '') + '" data-lista="' + n + '" onclick="' + fn + "('LISTA:' + this.getAttribute('data-lista'), this)" + '">' + n + '</button>';
+    }).join('');
+  });
+}
+function lcEliminar(){
+  var nombre = lcLista;
+  cerrarModales();
+  lcLista = null;
+  if(nombre) eliminarListaPrecios(LISTAS_COLS.indexOf(nombre));
+}
 var lcLista = null;
 function abrirClientesLista(c){
   var nombre = LISTAS_COLS[c];
@@ -2159,12 +2202,14 @@ function setFiltroPres(cod,el){
   el.classList.add('active'); renderPresupuestos();
 }
 function renderPresupuestos(){
+  renderFiltrosListas();
   const colores={'G':'#185FA5','L':'#3B6D11','E':'#854F0B','S':'#7B3FB0','C':'#A32D2D'};
   const desde=document.getElementById('pres-desde')?.value;
   const hasta=document.getElementById('pres-hasta')?.value;
   const lista=db.presupuestos.filter(p=>{
     const cod=(p.cliente?.codigo||'').toUpperCase();
-    if(filtroPresupuesto!==''&&filtroPresupuesto!=='SIN'&&cod!==filtroPresupuesto) return false;
+    if(filtroPresupuesto.indexOf('LISTA:')===0){ if(!clienteEnLista(p.cliente,filtroPresupuesto.slice(6))) return false; }
+    else if(filtroPresupuesto!==''&&filtroPresupuesto!=='SIN'&&cod!==filtroPresupuesto) return false;
     if(filtroPresupuesto==='SIN'&&cod) return false;
     if(desde&&p.fecha&&p.fecha<desde) return false;
     if(hasta&&p.fecha&&p.fecha>hasta) return false;
@@ -2368,11 +2413,13 @@ function setFiltroDeudor(cod, el){
   renderDeudores();
 }
 function renderDeudores(){
+  renderFiltrosListas();
   const pendientes=db.presupuestos.filter(p=>{
     if(p.estado!=='Pendiente') return false;
     if(filtroCodDeudor==='') return true;
     const cod=(p.cliente?.codigo||'').toUpperCase();
     if(filtroCodDeudor==='SIN') return !cod;
+    if(filtroCodDeudor.indexOf('LISTA:')===0) return clienteEnLista(p.cliente, filtroCodDeudor.slice(6));
     return cod===filtroCodDeudor;
   });
   const totalSaldo=pendientes.reduce((a,p)=>a+saldoPendienteBoleta(p),0);
@@ -2556,12 +2603,14 @@ function setFiltroAfavor(cod,el){
   el.classList.add('active'); renderAfavor();
 }
 function renderAfavor(){
+  renderFiltrosListas();
   const colores={'G':'#185FA5','L':'#3B6D11','E':'#854F0B','S':'#7B3FB0','C':'#A32D2D'};
   const lista=db.presupuestos.filter(p=>{
     if(saldoPendienteBoleta(p)>-0.01) return false;
     const cod=(p.cliente?.codigo||'').toUpperCase();
     if(filtroAfavor==='') return true;
     if(filtroAfavor==='SIN') return !cod;
+    if(filtroAfavor.indexOf('LISTA:')===0) return clienteEnLista(p.cliente, filtroAfavor.slice(6));
     return cod===filtroAfavor;
   });
   const totalFavor=lista.reduce((a,p)=>a+saldoAFavor(p),0);

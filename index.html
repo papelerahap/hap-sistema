@@ -1236,6 +1236,7 @@ function cerrarSesion(){
 
 const API = ''; // misma dirección desde la que se abrió la página
 let guardandoEnServidor = false;
+let ultimoGuardadoOk = true;
 
 function cargar() {
   try {
@@ -1251,6 +1252,7 @@ async function guardar() {
   localStorage.setItem('hap_db', JSON.stringify(db));
   // 2. Subir al servidor
   guardandoEnServidor = true;
+  let guardadoOk = false;
   try {
     const res = await fetch(`${API}/api/db/all`, {
       method: 'POST',
@@ -1258,12 +1260,14 @@ async function guardar() {
       body: JSON.stringify(db)
     });
     if(!res.ok) console.warn('Error servidor:', res.status);
-    else console.log('✅ Guardado en servidor');
+    else { console.log('✅ Guardado en servidor'); guardadoOk = true; }
   } catch(e) {
     console.warn('Sin internet, solo local');
   } finally {
     guardandoEnServidor = false;
   }
+  ultimoGuardadoOk = guardadoOk;
+  return guardadoOk;
 }
 
 async function cargarDesdeServidor() {
@@ -1916,8 +1920,14 @@ async function lcGuardar(){
   renderClientes();
   var lab = document.getElementById('listas-cambios');
   if(lab){
-    lab.style.color = 'var(--green)';
-    lab.textContent = '✅ Lista ' + nombre + ': ' + n + (n === 1 ? ' cliente la usa' : ' clientes la usan');
+    if(ultimoGuardadoOk){
+      lab.style.color = 'var(--green)';
+      lab.textContent = '✅ Lista ' + nombre + ': ' + n + (n === 1 ? ' cliente la usa' : ' clientes la usan');
+    } else {
+      lab.style.color = 'var(--red)';
+      lab.textContent = '⚠️ Los clientes de la lista ' + nombre + ' quedaron SOLO en esta computadora: no se pudo guardar en el servidor.';
+      alert('No se pudo guardar en el servidor. Esperá unos segundos y probá de nuevo.');
+    }
   }
 }
 async function crearListaPrecios(){
@@ -1947,8 +1957,14 @@ async function crearListaPrecios(){
   inp.value = '';
   renderLista();
   lab = document.getElementById('listas-cambios');
-  lab.style.color = 'var(--green)';
-  lab.textContent = '✅ Lista ' + nombre + ' creada. Elegí qué clientes la usan.';
+  if(ultimoGuardadoOk){
+    lab.style.color = 'var(--green)';
+    lab.textContent = '✅ Lista ' + nombre + ' creada y guardada. Elegí qué clientes la usan.';
+  } else {
+    lab.style.color = 'var(--red)';
+    lab.textContent = '⚠️ La lista ' + nombre + ' quedó SOLO en esta computadora: no se pudo guardar en el servidor.';
+    alert('No se pudo guardar la lista en el servidor. Si refrescás la página se pierde. Esperá unos segundos y probá de nuevo.');
+  }
   abrirClientesLista(LISTAS_COLS.indexOf(nombre));
 }
 async function eliminarListaPrecios(c){
@@ -1990,8 +2006,14 @@ async function guardarListas(){
   try { await guardar(); } catch(e) {}
   btn.disabled = false; btn.textContent = '💾 Guardar todo';
   listasCambio();
-  lab.style.color = 'var(--green)';
-  lab.textContent = '✅ ' + cambios.length + (cambios.length === 1 ? ' precio guardado' : ' precios guardados');
+  if(ultimoGuardadoOk){
+    lab.style.color = 'var(--green)';
+    lab.textContent = '✅ ' + cambios.length + (cambios.length === 1 ? ' precio guardado' : ' precios guardados');
+  } else {
+    lab.style.color = 'var(--red)';
+    lab.textContent = '⚠️ Los precios quedaron SOLO en esta computadora: no se pudieron guardar en el servidor.';
+    alert('No se pudo guardar en el servidor. Si refrescás la página se pierden. Esperá unos segundos y apretá Guardar todo de nuevo.');
+  }
 }
 
 function calcSaldoPendienteCliente(cliIdx){

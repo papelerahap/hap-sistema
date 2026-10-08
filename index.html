@@ -109,6 +109,12 @@ tbody tr:hover td { background: var(--bg); }
 .filtro-l.active { background: #3B6D11; border-color: #3B6D11; color: #fff; }
 .filtro-e.active { background: #854F0B; border-color: #854F0B; color: #fff; }
 .filtro-n.active { background: #6b6a66; border-color: #6b6a66; color: #fff; }
+.tabla-listas th, .tabla-listas td { padding: 8px 6px; }
+.tabla-listas .lp-sticky1 { position: sticky; left: 0; z-index: 2; background: var(--bg2); width: 34px; min-width: 34px; max-width: 34px; padding-left: 10px; }
+.tabla-listas .lp-sticky2 { position: sticky; left: 34px; z-index: 2; background: var(--bg2); min-width: 190px; max-width: 240px; box-shadow: 1px 0 0 var(--border); }
+.tabla-listas th.lp-sticky1, .tabla-listas th.lp-sticky2 { background: var(--bg); z-index: 3; }
+.filtro-x-del { margin-left: 6px; opacity: 0.55; font-size: 11px; }
+.filtro-x-del:hover { opacity: 1; color: #A32D2D; }
 .filtro-x.active { background: #0F766E; border-color: #0F766E; color: #fff; }
 
 /* AUTOCOMPLETE */
@@ -319,7 +325,7 @@ tbody tr:hover td { background: var(--bg); }
       </div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Tip: copiá celdas desde Excel y pegalas en una casilla: se completan hacia abajo y hacia la derecha (una columna por lista). Lo que queda vacío no se modifica. En General, el número gris es el precio automático (costo + margen). A cada cliente le elegís su lista al editarlo.</div>
       <div class="card" style="overflow-x:auto">
-        <table>
+        <table class="tabla-listas">
           <thead id="listas-thead"></thead>
           <tbody id="tabla-lista"></tbody>
         </table>
@@ -1638,7 +1644,7 @@ function renderLista(){
   listasArmarCabecera();
   var prods = db.productos;
   if(!prods.length){
-    t.innerHTML = '<tr class="empty-row"><td colspan="8">No hay productos cargados</td></tr>';
+    t.innerHTML = '<tr class="empty-row"><td colspan="4">No hay productos cargados</td></tr>';
     listasCambio();
     return;
   }
@@ -1647,14 +1653,12 @@ function renderLista(){
     var celdas = LISTAS_COLS.map(function(lista, c){
       var v = listasActual(p, lista);
       var ph = (lista === 'General' && auto > 0) ? fmtInp(auto) : '—';
-      return '<td style="text-align:right"><input type="text" inputmode="decimal" class="inp" id="lp-in-' + k + '-' + c + '" value="' + (v > 0 ? fmtInp(v) : '') + '" placeholder="' + ph + '" style="width:105px;text-align:right" oninput="listasCambio()" onpaste="listasPegar(event,' + k + ',' + c + ')" onkeydown="listasTecla(event,' + k + ',' + c + ')" onblur="listasNormalizar(' + k + ',' + c + ')"></td>';
+      return '<td style="text-align:right"><input type="text" inputmode="decimal" class="inp" id="lp-in-' + k + '-' + c + '" value="' + (v > 0 ? fmtInp(v) : '') + '" placeholder="' + ph + '" style="width:92px;text-align:right" oninput="listasCambio()" onpaste="listasPegar(event,' + k + ',' + c + ')" onkeydown="listasTecla(event,' + k + ',' + c + ')" onblur="listasNormalizar(' + k + ',' + c + ')"></td>';
     }).join('');
     return '<tr data-k="' + k + '">' +
-      '<td><input type="checkbox" class="lp-chk" onclick="listasClick(event,' + k + ')"></td>' +
-      '<td style="font-size:12px;color:var(--text2)">' + (p.codigo || '—') + '</td>' +
-      '<td><strong>' + p.nombre + '</strong></td>' +
-      '<td style="font-size:12px;color:var(--text2)">' + (p.medida || '—') + '</td>' +
-      '<td style="text-align:right;font-size:12px;color:var(--text2)">' + (p.costo > 0 ? '$' + fmt(p.costo) : '—') + '</td>' +
+      '<td class="lp-sticky1"><input type="checkbox" class="lp-chk" onclick="listasClick(event,' + k + ')"></td>' +
+      '<td class="lp-sticky2"><strong>' + p.nombre + '</strong><div style="font-size:11px;color:var(--text3)">' + (p.codigo || '') + (p.codigo && p.medida ? ' · ' : '') + (p.medida || '') + '</div></td>' +
+      '<td style="text-align:right;font-size:12px;color:var(--text2);white-space:nowrap">' + (p.costo > 0 ? '$' + fmt(p.costo) : '—') + '</td>' +
       celdas + '</tr>';
   }).join('');
   filtrarListas();
@@ -1812,10 +1816,10 @@ function poblarSelectLista(id, valor){
 }
 function listasArmarCabecera(){
   LISTAS_COLS = listasNombres();
-  var h = '<th style="width:36px"><input type="checkbox" id="listas-todos" onchange="listasSelTodos(this.checked)"></th><th>Código</th><th style="min-width:190px">Producto</th><th style="min-width:110px">Medida</th><th style="text-align:right">Costo</th>';
+  var h = '<th class="lp-sticky1"><input type="checkbox" id="listas-todos" onchange="listasSelTodos(this.checked)"></th><th class="lp-sticky2">Producto</th><th style="text-align:right">Costo</th>';
   LISTAS_COLS.forEach(function(n, c){
     var nCli = db.clientes.filter(function(x){ return x.lista_precio === n; }).length;
-    h += '<th style="text-align:right">' + n + (c > 0 ? ' <button class="btn btn-sm" title="Elegir qué clientes usan esta lista" onclick="abrirClientesLista(' + c + ')" style="padding:0 6px;font-size:11px">👥 ' + nCli + '</button><button class="btn btn-sm btn-danger" title="Eliminar esta lista" onclick="eliminarListaPrecios(' + c + ')" style="padding:0 5px;font-size:11px">🗑</button>' : '') + '</th>';
+    h += '<th style="text-align:right" data-lista="' + n + '"><div>' + n + '</div>' + (c > 0 ? '<div style="white-space:nowrap;margin-top:3px"><button class="btn btn-sm" title="Elegir qué clientes usan esta lista" onclick="abrirClientesLista(' + c + ')" style="padding:0 6px;font-size:11px">👥 ' + nCli + '</button> <button class="btn btn-sm btn-danger" title="Eliminar esta lista" onclick="eliminarListaPrecios(' + c + ')" style="padding:0 5px;font-size:11px">🗑</button></div>' : '') + '</th>';
   });
   document.getElementById('listas-thead').innerHTML = '<tr>' + h + '</tr>';
   var s1 = document.getElementById('listas-igual-lista'), v1 = s1.value;
@@ -1854,9 +1858,22 @@ function renderFiltrosListas(){
     }
     sp.innerHTML = extra.map(function(n){
       var on = actual === 'LISTA:' + n;
-      return '<button class="filtro-btn filtro-x' + (on ? ' active' : '') + '" data-lista="' + n + '" onclick="' + fn + "('LISTA:' + this.getAttribute('data-lista'), this)" + '">' + n + '</button>';
+      return '<button class="filtro-btn filtro-x' + (on ? ' active' : '') + '" data-lista="' + n + '" onclick="' + fn + "('LISTA:' + this.getAttribute('data-lista'), this)" + '">' + n + ' <span class="filtro-x-del" title="Eliminar esta lista" onclick="event.stopPropagation(); eliminarListaPorNombre(this.parentNode.getAttribute(' + "'data-lista'" + '))">✕</span></button>';
     }).join('');
   });
+}
+async function eliminarListaPorNombre(nombre){
+  LISTAS_COLS = listasNombres();
+  var c = LISTAS_COLS.indexOf(nombre);
+  if(c < 1) return;
+  await eliminarListaPrecios(c);
+  renderFiltrosListas();
+  var sec = document.querySelector('.section.active');
+  var id = sec ? sec.id : '';
+  if(id === 'clientes') renderClientes();
+  else if(id === 'presupuestos') renderPresupuestos();
+  else if(id === 'deudores') renderDeudores();
+  else if(id === 'afavor') renderAfavor();
 }
 function lcEliminar(){
   var nombre = lcLista;
@@ -1956,6 +1973,8 @@ async function crearListaPrecios(){
   try { await guardar(); } catch(e) {}
   inp.value = '';
   renderLista();
+  var thNueva = document.querySelector('#listas-thead th[data-lista="' + nombre + '"]');
+  if(thNueva && thNueva.scrollIntoView) thNueva.scrollIntoView({ inline: 'center', block: 'nearest' });
   lab = document.getElementById('listas-cambios');
   if(ultimoGuardadoOk){
     lab.style.color = 'var(--green)';

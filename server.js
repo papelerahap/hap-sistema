@@ -378,6 +378,7 @@ tbody tr:hover td { background: var(--bg); }
         <h2>Presupuestos</h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="btn-desc-stock" onclick="descontarStockAnteriores()">📦 Descontar stock de boletas anteriores</button><button class="btn btn-primary" onclick="abrirModalPresupuesto()">+ Nuevo presupuesto</button></div>
       </div>
+      <div style="margin-bottom:10px"><input type="search" id="pres-buscar" placeholder="🔍 Buscar por cliente, número de boleta o producto..." oninput="renderPresupuestos()" style="width:100%;max-width:420px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
         <button class="filtro-btn active" onclick="setFiltroPres('',this)">Todos</button>
         <button class="filtro-btn filtro-g" onclick="setFiltroPres('G',this)">Gloria (G)</button>
@@ -406,6 +407,7 @@ tbody tr:hover td { background: var(--bg); }
         <h2>Deudores 🔴</h2>
         <span id="deudores-total" style="font-size:13px;color:var(--red);font-weight:600"></span>
       </div>
+      <div style="margin-bottom:10px"><input type="search" id="deudores-buscar" placeholder="🔍 Buscar por cliente, número de boleta o teléfono..." oninput="renderDeudores()" style="width:100%;max-width:420px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
         <button class="filtro-btn active" onclick="setFiltroDeudor('',this)">Todos</button>
         <button class="filtro-btn filtro-g" onclick="setFiltroDeudor('G',this)">Gloria (G)</button>
@@ -2438,6 +2440,12 @@ function renderPresupuestos(){
     if(filtroPresupuesto==='SIN'&&cod) return false;
     if(desde&&p.fecha&&p.fecha<desde) return false;
     if(hasta&&p.fecha&&p.fecha>hasta) return false;
+    var qEl=document.getElementById('pres-buscar');
+    var q=qEl?qEl.value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''):'';
+    if(q){
+      var txt=((p.cliente?p.cliente.nombre:'Consumidor final')+' '+p.numero+' '+(p.cliente&&p.cliente.codigo?p.cliente.codigo:'')+' '+(p.lineas||[]).map(function(l){return l.nombre;}).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+      if(!q.split(' ').every(function(w){ return txt.indexOf(w)>-1; })) return false;
+    }
     return true;
   });
   document.getElementById('pres-count').textContent=lista.length+' presupuesto'+(lista.length!==1?'s':'');
@@ -2676,6 +2684,12 @@ function renderDeudores(){
     if(filtroCodDeudor==='SIN') return !cod;
     if(filtroCodDeudor.indexOf('LISTA:')===0) return clienteEnLista(p.cliente, filtroCodDeudor.slice(6));
     return cod===filtroCodDeudor;
+  }).filter(p=>{
+    var qEl=document.getElementById('deudores-buscar');
+    var q=qEl?qEl.value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''):'';
+    if(!q) return true;
+    var txt=((p.cliente?p.cliente.nombre:'Consumidor final')+' '+p.numero+' '+(p.cliente&&p.cliente.tel?p.cliente.tel:'')+' '+(p.cliente&&p.cliente.codigo?p.cliente.codigo:'')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    return q.split(' ').every(function(w){ return txt.indexOf(w)>-1; });
   });
   const totalSaldo=pendientes.reduce((a,p)=>a+saldoPendienteBoleta(p),0);
   document.getElementById('deudores-total').textContent=

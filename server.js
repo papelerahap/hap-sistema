@@ -1023,6 +1023,16 @@ tbody tr:hover td { background: var(--bg); }
   </div>
 </div>
 
+<!-- MODAL HISTORIAL CLIENTE -->
+<div class="modal-backdrop" id="modal-historial-cliente">
+  <div class="modal" style="max-width:900px;width:96%">
+    <h3 id="hist-titulo">Historial del cliente</h3>
+    <div id="hist-resumen" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px"></div>
+    <div style="max-height:60vh;overflow:auto"><table><thead><tr><th>N°</th><th>Fecha</th><th>Detalle</th><th>Total</th><th>Pagado</th><th>Saldo</th><th>Estado</th><th></th></tr></thead><tbody id="hist-tabla"></tbody></table></div>
+    <div class="modal-footer" style="margin-top:12px"><button class="btn" onclick="cerrarModales()">Cerrar</button></div>
+  </div>
+</div>
+
 <!-- MODAL CLIENTE -->
 <div class="modal-backdrop" id="modal-cliente">
   <div class="modal">
@@ -1512,11 +1522,47 @@ function renderClientes(){
       <td style="font-size:12px">\${c.cuit||'—'}</td>
       <td style="font-size:12px">\${c.dir||'—'}</td>
       <td style="white-space:nowrap">
+        <button class="btn btn-sm" onclick="verHistorialCliente(\${realIdx})" title="Historial de boletas">📜 Historial</button>
         <button class="btn btn-sm" onclick="abrirModalCliente(\${realIdx})">✏️</button>
         <button class="btn btn-sm btn-danger" onclick="eliminarCliente(\${realIdx})">🗑️</button>
       </td>
     </tr>\`;
   }).join('');
+}
+function verHistorialCliente(ci){
+  var c = db.clientes[ci];
+  if(!c) return;
+  var lista = db.presupuestos.filter(function(p){ return p.cliente && p.cliente.nombre === c.nombre; })
+    .sort(function(a, b){ return (b.numero || 0) - (a.numero || 0); });
+  document.getElementById('hist-titulo').textContent = 'Historial de ' + c.nombre + (c.codigo ? ' (' + c.codigo + ')' : '');
+  var tot = 0, pag = 0, deb = 0;
+  lista.forEach(function(p){
+    var pg = (p.pagos || []).reduce(function(s, x){ return s + x.monto; }, 0);
+    tot += p.total; pag += pg;
+    if(p.estado === 'Pendiente') deb += saldoPendienteBoleta(p);
+  });
+  var caja = function(titulo, valor, color){ return '<div style="border:1px solid var(--border);border-radius:var(--radius);padding:8px 14px"><div style="font-size:11px;color:var(--text3)">' + titulo + '</div><div style="font-size:16px;font-weight:700;color:' + color + '">' + valor + '</div></div>'; };
+  document.getElementById('hist-resumen').innerHTML =
+    caja('Boletas', String(lista.length), 'var(--text)') + caja('Total vendido', '$' + fmt(tot), 'var(--text)') +
+    caja('Total cobrado', '$' + fmt(pag), 'var(--green)') + caja('Debe actualmente', '$' + fmt(Math.max(0, deb)), 'var(--red)');
+  var t = document.getElementById('hist-tabla');
+  if(!lista.length){ t.innerHTML = '<tr class="empty-row"><td colspan="8">Este cliente todavía no tiene boletas</td></tr>'; }
+  else t.innerHTML = lista.map(function(p){
+    var i = db.presupuestos.indexOf(p);
+    var pg = (p.pagos || []).reduce(function(s, x){ return s + x.monto; }, 0);
+    var saldo = saldoPendienteBoleta(p);
+    var det = (p.lineas || []).map(function(l){ return l.cant + ' x ' + l.nombre; }).join(', ');
+    if(det.length > 110) det = det.slice(0, 110) + '...';
+    return '<tr><td><strong>' + p.numero + '</strong></td>' +
+      '<td style="font-size:12px">' + (p.fecha ? new Date(p.fecha + 'T12:00:00').toLocaleDateString('es-AR') : '') + '</td>' +
+      '<td style="font-size:11px;color:var(--text2);max-width:260px">' + det + '</td>' +
+      '<td><strong>$' + fmt(p.total) + '</strong></td>' +
+      '<td style="color:var(--green)">$' + fmt(pg) + '</td>' +
+      '<td style="color:' + (saldo > 0.01 ? 'var(--red)' : 'var(--text3)') + '">$' + fmt(saldo) + '</td>' +
+      '<td>' + p.estado + '</td>' +
+      '<td style="white-space:nowrap"><button class="btn btn-sm" onclick="cerrarModales();editarPresupuesto(' + i + ')">✏️</button> <button class="btn btn-sm btn-green" onclick="imprimirPresupuesto(' + i + ')">🖨️</button></td></tr>';
+  }).join('');
+  document.getElementById('modal-historial-cliente').classList.add('open');
 }
 function filtrarClientes(v){ renderClientes(); }
 

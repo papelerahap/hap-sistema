@@ -1446,6 +1446,41 @@ function calcMargen() {
   const c=parseFloat(document.getElementById('p-costo').value)||0, v=parseFloat(document.getElementById('p-precio').value)||0;
   document.getElementById('p-margen').value = (c>0&&v>0) ? ((v-c)/c*100).toFixed(1)+'%' : '—';
 }
+function propagarRenombreProducto(viejo, nuevo){
+  var res = { boletas: 0, lineas: 0, listas: 0 };
+  if(!viejo || !nuevo) return res;
+  var cambioNombre = viejo.nombre !== nuevo.nombre;
+  var cambioCodigo = (viejo.codigo || '') !== (nuevo.codigo || '');
+  if(!cambioNombre && !cambioCodigo) return res;
+  (db.presupuestos || []).forEach(function(b){
+    var tocada = false;
+    (b.lineas || []).forEach(function(l){
+      var porCod = viejo.codigo && l.cod && String(l.cod) === String(viejo.codigo);
+      var porNombre = l.nombre === viejo.nombre && (!l.cod || !viejo.codigo || porCod);
+      if(porCod || porNombre){
+        var cambio = false;
+        if(l.nombre !== nuevo.nombre){ l.nombre = nuevo.nombre; cambio = true; }
+        if(porCod && cambioCodigo){ l.cod = nuevo.codigo; cambio = true; }
+        if(cambio){ res.lineas++; tocada = true; }
+      }
+    });
+    (b.stock_aplicado || []).forEach(function(a){
+      if(a.nombre === viejo.nombre){ a.nombre = nuevo.nombre; a.codigo = nuevo.codigo; }
+    });
+    if(tocada) res.boletas++;
+  });
+  if(cambioNombre && db.listas_precio){
+    Object.keys(db.listas_precio).forEach(function(lista){
+      var L = db.listas_precio[lista];
+      if(L && Object.prototype.hasOwnProperty.call(L, viejo.nombre)){
+        if(!Object.prototype.hasOwnProperty.call(L, nuevo.nombre)) L[nuevo.nombre] = L[viejo.nombre];
+        delete L[viejo.nombre];
+        res.listas++;
+      }
+    });
+  }
+  return res;
+}
 function guardarProducto() {
   const nombre=document.getElementById('p-nombre').value.trim();
   if(!nombre){alert('Ingresá el nombre');return;}
@@ -1454,8 +1489,16 @@ function guardarProducto() {
     costo:parseFloat(document.getElementById('p-costo').value)||0, precio:parseFloat(document.getElementById('p-precio').value)||0,
     stock:parseInt(document.getElementById('p-stock').value)||0, minimo:parseInt(document.getElementById('p-minimo').value)||5,
     proveedor:document.getElementById('p-proveedor').value||'' };
+  var viejo = editIdx!==null ? db.productos[editIdx] : null;
+  var vcopy = viejo ? { nombre: viejo.nombre, codigo: viejo.codigo } : null;
   if(editIdx!==null) db.productos[editIdx]=p; else db.productos.push(p);
+  var rp = vcopy ? propagarRenombreProducto(vcopy, p) : { boletas: 0, lineas: 0, listas: 0 };
+  if(rp.lineas || rp.listas){
+    registrarActividad('presupuesto', 'Renombró producto: ' + vcopy.nombre + ' → ' + p.nombre, 'Actualizó ' + rp.lineas + ' líneas en ' + rp.boletas + ' boletas y ' + rp.listas + ' listas de precios');
+  }
   guardar(); cerrarModales(); renderProveedores(); renderDashboard();
+  if(typeof renderProductos === 'function') renderProductos();
+  if(rp.lineas || rp.listas) alert('Listo: el nombre nuevo se actualizó en ' + rp.boletas + ' boletas (' + rp.lineas + ' líneas) y en ' + rp.listas + ' listas de precios.');
 }
 function eliminarProductoDesdeModal(){
   if(editIdx===null||editIdx===undefined) return;

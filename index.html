@@ -13,6 +13,17 @@
   --amber: #854F0B; --amber-light: #FAEEDA; --red: #A32D2D; --red-light: #FCEBEB;
   --radius: 8px; --radius-lg: 12px;
 }
+:root[data-tema="oscuro"] {
+  color-scheme: dark;
+  --bg: #16171a; --bg2: #212328; --text: #ecebe7; --text2: #b3b1ab; --text3: #8a8882;
+  --border: #373a41; --border2: #4a4e57; --blue: #6aaef0; --blue-light: #1c3550;
+  --blue-text: #a9d3fb; --green: #8fcf5a; --green-light: #243a17;
+  --amber: #e5a95c; --amber-light: #3d2d12; --red: #f08a8a; --red-light: #432324;
+}
+:root[data-tema="oscuro"] input, :root[data-tema="oscuro"] select, :root[data-tema="oscuro"] textarea { background: var(--bg2); color: var(--text); border-color: var(--border2); }
+:root[data-tema="oscuro"] .btn-primary { color: #0b1b2b; }
+:root[data-tema="oscuro"] ::placeholder { color: var(--text3); }
+:root[data-tema="oscuro"] .login-box { box-shadow: 0 4px 24px rgba(0,0,0,0.5); }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
 .app { display: flex; min-height: 100vh; }
 .sidebar { width: 220px; min-width: 220px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; height: 100vh; z-index: 10; overflow-y: auto; }
@@ -129,6 +140,7 @@ tbody tr:hover td { background: var(--bg); }
 
 /* ===== ESTILOS DE IMPRESIÓN ===== */
 @media print {
+  :root[data-tema="oscuro"] { color-scheme: light; --bg: #f7f6f3; --bg2: #ffffff; --text: #1a1a18; --text2: #6b6a66; --text3: #9e9c97; --border: #e0ded9; --border2: #c8c6c0; --blue: #185FA5; --blue-light: #e6f1fb; --blue-text: #0C447C; --green: #3B6D11; --green-light: #EAF3DE; --amber: #854F0B; --amber-light: #FAEEDA; --red: #A32D2D; --red-light: #FCEBEB; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { background: #fff; margin: 0; padding: 0; }
   .app { display: none !important; }
@@ -202,6 +214,7 @@ tbody tr:hover td { background: var(--bg); }
       <div style="margin-top:6px;display:flex;align-items:center;justify-content:space-between">
         <span id="rol-badge" class="rol-badge"></span>
         <div style="display:flex;gap:6px;align-items:center">
+          <button id="btn-tema" onclick="alternarTema()" style="font-size:11px;color:var(--text3);background:none;border:none;cursor:pointer;padding:0" title="Pasar a modo oscuro">🌙</button>
           <button onclick="sincronizar()" style="font-size:11px;color:var(--text3);background:none;border:none;cursor:pointer;padding:0" title="Actualizar datos">🔄</button>
           <button onclick="cerrarSesion()" style="font-size:11px;color:var(--text3);background:none;border:none;cursor:pointer;padding:0">↩ Salir</button>
         </div>
@@ -1127,6 +1140,17 @@ const DB_DEFAULTS = JSON.parse(document.getElementById('db-defaults-data').textC
 let db = JSON.parse(JSON.stringify(DB_DEFAULTS));
 
 // ===== SISTEMA DE ROLES =====
+function aplicarTema(t){
+  document.documentElement.setAttribute('data-tema', t === 'oscuro' ? 'oscuro' : 'claro');
+  var b = document.getElementById('btn-tema');
+  if(b){ b.textContent = t === 'oscuro' ? '☀️' : '🌙'; b.title = t === 'oscuro' ? 'Pasar a modo claro' : 'Pasar a modo oscuro'; }
+}
+function alternarTema(){
+  var nuevo = document.documentElement.getAttribute('data-tema') === 'oscuro' ? 'claro' : 'oscuro';
+  aplicarTema(nuevo);
+  try { localStorage.setItem('hap_tema', nuevo); } catch(e) {}
+}
+(function(){ var t = 'claro'; try { t = localStorage.getItem('hap_tema') || 'claro'; } catch(e) {} aplicarTema(t); })();
 let rolActual = null; // 'admin' | 'empleado'
 
 const SECCIONES_EMPLEADO = ['dashboard','clientes','presupuestos','deudores','afavor','proveedores'];

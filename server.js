@@ -1043,7 +1043,7 @@ tbody tr:hover td { background: var(--bg); }
 <!-- MODAL PRESUPUESTO -->
 <div class="modal-backdrop" id="modal-presupuesto">
   <div class="modal modal-wide">
-    <h3>Nuevo presupuesto</h3>
+    <h3 id="titulo-modal-pres">Nuevo presupuesto</h3>
     <div class="form-grid form-grid-2" style="margin-bottom:12px">
       <div class="form-group"><label>Cliente</label>
         <div class="ac-wrap">
@@ -1096,7 +1096,7 @@ tbody tr:hover td { background: var(--bg); }
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="cerrarModales()">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarPresupuesto()">Guardar presupuesto</button>
+      <button class="btn btn-primary" id="btn-guardar-pres" onclick="guardarPresupuesto()">Guardar presupuesto</button>
     </div>
   </div>
 </div>
@@ -1495,6 +1495,9 @@ function filtrarClientes(v){ renderClientes(); }
 // ---- PRESUPUESTOS ----
 function abrirModalPresupuesto(){
   try {
+  editPresIdx = null; presClienteSnapshot = null;
+  document.getElementById('titulo-modal-pres').textContent = 'Nuevo presupuesto';
+  document.getElementById('btn-guardar-pres').textContent = 'Guardar presupuesto';
   document.getElementById('modal-presupuesto').classList.add('open');
   listaClienteActual = 'General';
   const presLista = document.getElementById('pres-lista');
@@ -1525,6 +1528,76 @@ function acCliente(q){
 }
 // Variable global que guarda la lista del cliente actual
 let listaClienteActual = null;
+let editPresIdx = null;
+let presClienteSnapshot = null;
+function editarPresupuesto(idx){
+  var p = db.presupuestos[idx];
+  if(!p) return;
+  abrirModalPresupuesto();
+  editPresIdx = idx;
+  presClienteSnapshot = null;
+  document.getElementById('titulo-modal-pres').textContent = 'Editar boleta #' + p.numero;
+  document.getElementById('btn-guardar-pres').textContent = 'Guardar cambios';
+  document.getElementById('pres-fecha').value = p.fecha || '';
+  document.getElementById('pres-obs').value = p.obs || '';
+  document.getElementById('pres-deuda').value = p.deuda ? p.deuda : '';
+  document.getElementById('pres-cliente-input').value = '';
+  document.getElementById('pres-cliente-idx').value = '';
+  if(p.cliente){
+    var ci = db.clientes.findIndex(function(c){ return c.nombre === p.cliente.nombre; });
+    document.getElementById('pres-cliente-input').value = p.cliente.nombre + (p.cliente.codigo ? ' (' + p.cliente.codigo + ')' : '');
+    if(ci > -1){
+      document.getElementById('pres-cliente-idx').value = ci;
+      var lista = db.clientes[ci].lista_precio || 'General';
+      listaClienteActual = lista;
+      poblarSelectLista('pres-lista', lista);
+    } else {
+      presClienteSnapshot = p.cliente; // el cliente ya no está en la lista: se conserva tal cual
+    }
+  }
+  var cont = document.getElementById('lineas-presupuesto');
+  cont.innerHTML = '';
+  (p.lineas || []).forEach(function(l){
+    agregarLineaPres();
+    var row = cont.lastElementChild;
+    row.querySelector('.cod-linea').value = l.cod || '';
+    row.querySelector('.prod-search').value = l.nombre || '';
+    row.querySelector('.cant-linea').value = l.cant;
+    row.querySelector('.precio-linea').value = l.precio;
+    recalcLinea(row.querySelector('.cant-linea'));
+  });
+  agregarLineaPres();
+  calcTotalPres();
+}
+function guardarEdicionPresupuesto(lineas, subtotal, cliente, deuda){
+  var p = db.presupuestos[editPresIdx];
+  if(!p){ alert('No se encontró la boleta'); return; }
+  var nuevoTotal = subtotal + deuda;
+  var pagado = (p.pagos || []).reduce(function(s, pg){ return s + pg.monto; }, 0);
+  if(pagado > 0 && Math.abs(nuevoTotal - p.total) > 0.005){
+    if(!confirm('Esta boleta ya tiene pagos por $' + fmt(pagado) + '. Los pagos se mantienen y el saldo se recalcula con el total nuevo ($' + fmt(nuevoTotal) + '). ¿Guardar los cambios?')) return;
+  }
+  var totalAntes = p.total;
+  var textoCliente = document.getElementById('pres-cliente-input').value.trim();
+  if(cliente) p.cliente = Object.assign({}, cliente);
+  else if(presClienteSnapshot && textoCliente === (presClienteSnapshot.nombre + (presClienteSnapshot.codigo ? ' (' + presClienteSnapshot.codigo + ')' : ''))) p.cliente = presClienteSnapshot;
+  else p.cliente = null;
+  p.fecha = document.getElementById('pres-fecha').value;
+  p.obs = document.getElementById('pres-obs').value.trim();
+  p.lineas = lineas;
+  p.subtotal = subtotal;
+  p.deuda = deuda;
+  p.total = nuevoTotal;
+  registrarActividad('presupuesto', 'Editó boleta #' + p.numero, 'Cliente: ' + (p.cliente ? p.cliente.nombre : 'Consumidor final') + ' | Total: $' + fmt(totalAntes) + ' → $' + fmt(nuevoTotal));
+  editPresIdx = null;
+  presClienteSnapshot = null;
+  cerrarModales();
+  renderPresupuestos(); renderDashboard(); renderDeudores(); renderAfavor();
+  guardar().then(function(){
+    if(!ultimoGuardadoOk) alert('Los cambios de la boleta quedaron SOLO en esta computadora: no se pudieron guardar en el servidor. Si refrescás la página se pierden. Esperá unos segundos y volvé a guardar.');
+  });
+}
+
 
 function aplicarDescuento(){
   const sel = document.getElementById('pres-descuento');
@@ -2159,6 +2232,7 @@ function guardarPresupuesto(){
   const cliIdxVal=document.getElementById('pres-cliente-idx').value;
   const cliente=cliIdxVal!==''?db.clientes[parseInt(cliIdxVal)]:null;
   const deuda=parseFloat(document.getElementById('pres-deuda').value)||0;
+  if(editPresIdx !== null){ guardarEdicionPresupuesto(lineas, subtotal, cliente, deuda); return; }
   const num=db.contador.presupuesto||1; db.contador.presupuesto=num+1;
   db.presupuestos.unshift({ numero:num, fecha:document.getElementById('pres-fecha').value,
     validez:'', cliente:cliente?{...cliente}:null,
@@ -2288,6 +2362,7 @@ function renderPresupuestos(){
         \${['Pendiente','Aprobado','Rechazado','Vencido'].map(e=>\`<option\${p.estado===e?' selected':''}>\${e}</option>\`).join('')}
       </select></td>
       <td style="white-space:nowrap">
+        <button class="btn btn-sm" onclick="editarPresupuesto(\${i})">✏️ Editar</button>
         <button class="btn btn-sm btn-green" onclick="imprimirPresupuesto(\${i})">🖨️ Imprimir</button>
         <button class="btn btn-sm btn-danger" onclick="eliminarPresupuesto(\${i})">🗑️</button>
       </td>
@@ -2516,6 +2591,7 @@ function renderDeudores(){
       <td style="white-space:nowrap;display:flex;gap:4px;align-items:center">
         <button class="btn btn-sm btn-primary" onclick="abrirModalPago(\${realIdx})">💲 Pago</button>
         <button class="btn btn-sm btn-green" onclick="cobrarPresupuesto(\${realIdx})">✅ Total</button>
+        <button class="btn btn-sm" onclick="editarPresupuesto(\${realIdx})" title="Editar boleta">✏️</button>
         <button class="btn btn-sm" onclick="imprimirPresupuesto(\${realIdx})">🖨️</button>
       </td>
     </tr>\`;

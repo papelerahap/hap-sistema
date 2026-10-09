@@ -714,6 +714,15 @@ tbody tr:hover td { background: var(--bg); }
     <!-- CONFIG -->
     <div id="config" class="section">
       <div class="section-header"><h2>Configuración de la empresa</h2></div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header"><h3>Copia de seguridad</h3></div>
+        <div class="card-body">
+          <div style="font-size:13px;color:var(--text3);margin-bottom:10px">Descarga TODO lo que ves en esta computadora (productos, clientes, boletas, listas, caja) en un archivo. Sirve para guardar una copia o pasar los datos a otra computadora.</div>
+          <button class="btn btn-primary" onclick="descargarBackup()">💾 Descargar copia de seguridad</button>
+          <button class="btn" onclick="document.getElementById('bk-file').click()">📂 Restaurar desde un archivo</button>
+          <input type="file" id="bk-file" accept=".json" style="display:none" onchange="restaurarBackup(this)">
+        </div>
+      </div>
       <div class="card">
         <div class="card-header"><h3>Datos que aparecen en los presupuestos impresos</h3></div>
         <div class="card-body">
@@ -2598,6 +2607,35 @@ function cargarConfig(){
   document.getElementById('cfg-margen-general').value=c.margenGeneral||30;
   document.getElementById('cfg-contador').value=db.contador?.presupuesto||1;
   renderListaEmpleados();
+}
+function descargarBackup(){
+  var blob = new Blob([JSON.stringify(db)], {type: 'application/json'});
+  var a = document.createElement('a');
+  var f = new Date();
+  a.href = URL.createObjectURL(blob);
+  a.download = 'hap-copia-' + f.getFullYear() + '-' + (f.getMonth() + 1) + '-' + f.getDate() + '-' + f.getHours() + f.getMinutes() + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function restaurarBackup(inp){
+  var file = inp.files && inp.files[0];
+  if(!file) return;
+  var rd = new FileReader();
+  rd.onload = function(){
+    var data;
+    try { data = JSON.parse(rd.result); } catch(e) { alert('El archivo no es una copia válida.'); return; }
+    if(!data || !data.productos || !data.presupuestos){ alert('El archivo no parece una copia del sistema (faltan productos o boletas).'); return; }
+    var NL = String.fromCharCode(10);
+    if(!confirm('Esta copia tiene ' + data.productos.length + ' productos, ' + (data.clientes || []).length + ' clientes y ' + data.presupuestos.length + ' boletas.' + NL + NL + 'Va a REEMPLAZAR todo lo que hay ahora en el sistema (en todas las computadoras). ¿Seguro?')) return;
+    db = data;
+    servidorConectado = null;
+    guardar().then(function(){
+      inp.value = '';
+      if(!ultimoGuardadoOk){ alert('No se pudo guardar en el servidor. No cierres esta página y probá de nuevo.'); return; }
+      alert('Listo, copia restaurada. Se va a recargar la página.');
+      location.reload();
+    });
+  };
+  rd.readAsText(file);
 }
 async function guardarConfig(){
   const nuevaPass = document.getElementById('cfg-pass')?.value?.trim();

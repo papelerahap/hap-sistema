@@ -1268,10 +1268,24 @@ function cargar() {
   }
 }
 
+var servidorConectado = null;
+function avisoServidor(ok){
+  servidorConectado = ok;
+  var b = document.getElementById('banner-sin-servidor');
+  if(ok){ if(b) b.remove(); return; }
+  if(!b){
+    b = document.createElement('div');
+    b.id = 'banner-sin-servidor';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b91c1c;color:#fff;font-weight:700;font-size:14px;padding:10px 14px;text-align:center';
+    b.textContent = 'NO SE PUDO CONECTAR CON EL SERVIDOR: estás viendo datos VIEJOS de esta computadora. No cargues nada ahora. Se reintenta solo cada 30 segundos; si sigue, refrescá con Ctrl+Shift+R.';
+    document.body.appendChild(b);
+  }
+}
 async function guardar() {
   // 1. Siempre guardar en local primero
   localStorage.setItem('hap_db', JSON.stringify(db));
-  // 2. Subir al servidor
+  // 2. Subir al servidor (nunca si no pudimos leer lo que hay: se pisarian datos nuevos con viejos)
+  if(servidorConectado === false){ ultimoGuardadoOk = false; return false; }
   guardandoEnServidor = true;
   let guardadoOk = false;
   try {
@@ -1297,7 +1311,9 @@ async function cargarDesdeServidor() {
   }
   try {
     const res = await fetch(\`\${API}/api/db/all\`);
+    if(!res.ok){ avisoServidor(false); return; }
     const data = await res.json();
+    avisoServidor(true);
     if(data && data.productos && data.productos.length > 0) {
       // El servidor tiene datos reales — usarlos completos
       db = data;
@@ -1316,6 +1332,7 @@ async function cargarDesdeServidor() {
     }
   } catch(e) {
     console.warn('Sin internet, usando local');
+    avisoServidor(false);
   }
 }
 

@@ -391,7 +391,7 @@ tbody tr:hover td { background: var(--bg); }
         <h2>Presupuestos</h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="btn-desc-stock" onclick="descontarStockAnteriores()">📦 Descontar stock de boletas anteriores</button><button class="btn btn-primary" onclick="abrirModalPresupuesto()">+ Nuevo presupuesto</button></div>
       </div>
-      <div style="margin-bottom:10px"><input type="search" id="pres-buscar" placeholder="🔍 Buscar por cliente, número de boleta o producto..." oninput="renderPresupuestos()" style="width:100%;max-width:420px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px"></div>
+      <div style="margin-bottom:10px"><input type="search" id="pres-buscar" placeholder="🔍 Buscar por cliente, número de boleta o producto..." oninput="renderPresupuestos()" style="width:100%;max-width:420px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px"> <label style="font-size:12px;color:var(--text2);margin-left:10px;white-space:nowrap"><input type="checkbox" id="pres-ver-cobradas" onchange="renderPresupuestos()"> Mostrar cobradas</label></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
         <button class="filtro-btn active" onclick="setFiltroPres('',this)">Todos</button>
         <button class="filtro-btn filtro-g" onclick="setFiltroPres('G',this)">Gloria (G)</button>
@@ -2556,6 +2556,9 @@ function renderPresupuestos(){
     if(desde&&p.fecha&&p.fecha<desde) return false;
     if(hasta&&p.fecha&&p.fecha>hasta) return false;
     var qEl=document.getElementById('pres-buscar');
+    var verCob=document.getElementById('pres-ver-cobradas');
+    var hayBusqueda=!!(qEl&&qEl.value.trim());
+    if(p.estado==='Aprobado'&&!hayBusqueda&&!(verCob&&verCob.checked)) return false;
     var q=qEl?qEl.value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''):'';
     if(q){
       var txt=((p.cliente?p.cliente.nombre:'Consumidor final')+' '+p.numero+' '+(p.cliente&&p.cliente.codigo?p.cliente.codigo:'')+' '+(p.lineas||[]).map(function(l){return l.nombre;}).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
@@ -2563,7 +2566,9 @@ function renderPresupuestos(){
     }
     return true;
   });
-  document.getElementById('pres-count').textContent=lista.length+' presupuesto'+(lista.length!==1?'s':'');
+  var nCob=db.presupuestos.filter(function(p){ return p.estado==='Aprobado'; }).length;
+  var verC=document.getElementById('pres-ver-cobradas');
+  document.getElementById('pres-count').textContent=lista.length+' presupuesto'+(lista.length!==1?'s':'')+((verC&&verC.checked)||!nCob?'':' · '+nCob+' cobrada'+(nCob!==1?'s':'')+' guardada'+(nCob!==1?'s':'')+' en el historial');
   const t=document.getElementById('tabla-presupuestos');
   if(!lista.length){t.innerHTML='<tr class="empty-row"><td colspan="7">Sin presupuestos en este filtro</td></tr>';return;}
   t.innerHTML=lista.map(p=>{

@@ -1292,6 +1292,7 @@ function aplicarRol(){
   if(!esAdmin){
     document.querySelectorAll('.col-costo').forEach(el=>el.style.display='none');
   }
+  ['p-costo','p-margen'].forEach(function(id){ var el=document.getElementById(id); if(el&&el.closest('.form-group')) el.closest('.form-group').style.display = esAdmin ? '' : 'none'; });
 }
 async function sincronizar(){
   const btn = document.querySelector('button[onclick="sincronizar()"]');
@@ -3525,7 +3526,7 @@ function renderProveedores(){
         ${rolActual==='admin'?`
         <th style="text-align:right;font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;padding:6px 10px;border-bottom:1px solid var(--border);background:var(--bg)">Costo actual</th>
         <th style="text-align:center;font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;padding:6px 10px;border-bottom:1px solid var(--border);background:var(--bg)">Editar costo</th>`
-        :`<th style="text-align:right;font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;padding:6px 10px;border-bottom:1px solid var(--border);background:var(--bg)">Costo</th>`}
+        :''}
         <th style="text-align:center;font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;padding:6px 10px;border-bottom:1px solid var(--border);background:var(--bg)">Stock actual</th>
         ${rolActual==='admin'?`<th style="text-align:center;font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;padding:6px 10px;border-bottom:1px solid var(--border);background:var(--bg)">Editar stock</th>`:''}
       </tr></thead>
@@ -3546,7 +3547,7 @@ function renderProveedores(){
               <button class="btn btn-sm btn-primary" onclick="guardarCostoProv(${pi})" style="padding:3px 8px;font-size:12px">✓</button>
             </div>
           </td>`
-          :`<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;font-weight:600">${p.costo>0?'$'+fmt(p.costo):'<span style="color:var(--text3)">—</span>'}</td>`}
+          :''}
           <td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:center">${p.stock} <span style="font-size:11px;color:var(--text3)">${p.unidad}</span></td>
           ${rolActual==='admin'?`<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:center">
             <div style="display:flex;gap:4px;justify-content:center;align-items:center">

@@ -376,7 +376,7 @@ tbody tr:hover td { background: var(--bg); }
     <div id="presupuestos" class="section">
       <div class="section-header">
         <h2>Presupuestos</h2>
-        <button class="btn btn-primary" onclick="abrirModalPresupuesto()">+ Nuevo presupuesto</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="btn-desc-stock" onclick="descontarStockAnteriores()">📦 Descontar stock de boletas anteriores</button><button class="btn btn-primary" onclick="abrirModalPresupuesto()">+ Nuevo presupuesto</button></div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
         <button class="filtro-btn active" onclick="setFiltroPres('',this)">Todos</button>
@@ -1528,6 +1528,69 @@ function acCliente(q){
 }
 // Variable global que guarda la lista del cliente actual
 let listaClienteActual = null;
+// ---- STOCK POR BOLETA ----
+function prodDeLinea(l){
+  var i = -1;
+  if(l.cod){ i = db.productos.findIndex(function(p){ return String(p.codigo) === String(l.cod); }); }
+  if(i < 0){ i = db.productos.findIndex(function(p){ return p.nombre === l.nombre; }); }
+  return i;
+}
+function descontarStockBoleta(p){
+  var aplicado = [], faltan = [], negativos = [];
+  (p.lineas || []).forEach(function(l){
+    var i = prodDeLinea(l);
+    if(i < 0){ faltan.push(l.nombre); return; }
+    var prod = db.productos[i];
+    prod.stock = (parseFloat(prod.stock) || 0) - l.cant;
+    aplicado.push({ i: i, codigo: prod.codigo, nombre: prod.nombre, cant: l.cant });
+    if(prod.stock < 0 && negativos.indexOf(prod.nombre) < 0) negativos.push(prod.nombre);
+  });
+  p.stock_aplicado = aplicado;
+  return { faltan: faltan, negativos: negativos };
+}
+function devolverStockBoleta(p){
+  (p.stock_aplicado || []).forEach(function(a){
+    var i = db.productos.findIndex(function(x){ return String(x.codigo) === String(a.codigo) && x.nombre === a.nombre; });
+    if(i < 0) i = db.productos.findIndex(function(x){ return x.nombre === a.nombre; });
+    if(i >= 0) db.productos[i].stock = (parseFloat(db.productos[i].stock) || 0) + a.cant;
+  });
+  p.stock_aplicado = null;
+}
+function avisoStock(r){
+  var m = '';
+  if(r.negativos.length) m += 'Ojo: estos productos quedaron con stock NEGATIVO (vendiste más de lo que tenías cargado): ' + r.negativos.join(', ') + '. ';
+  if(r.faltan.length) m += 'Estos productos de la boleta no se encontraron en Productos y no se descontaron: ' + r.faltan.join(', ') + '.';
+  if(m) alert(m);
+}
+function descontarStockAnteriores(){
+  var pend = db.presupuestos.filter(function(p){ return !p.stock_aplicado && p.estado !== 'Rechazado'; });
+  if(!pend.length){ alert('Todas las boletas ya tienen el stock descontado.'); return; }
+  var tot = {}, faltan = {};
+  pend.forEach(function(p){
+    (p.lineas || []).forEach(function(l){
+      var i = prodDeLinea(l);
+      if(i < 0){ faltan[l.nombre] = true; return; }
+      var n = db.productos[i].nombre;
+      tot[n] = (tot[n] || 0) + l.cant;
+    });
+  });
+  var nombres = Object.keys(tot);
+  var unidades = nombres.reduce(function(s, n){ return s + tot[n]; }, 0);
+  var NL = String.fromCharCode(10);
+  var msg = 'Hay ' + pend.length + ' boletas sin descontar del stock (' + nombres.length + ' productos, ' + unidades + ' unidades en total).' + NL + NL + '' +
+    'IMPORTANTE: si cargaste el stock DESPUÉS de hacer esas boletas, el stock ya está descontado y se restaría dos veces.' + NL + NL + '';
+  if(Object.keys(faltan).length) msg += 'No se encontraron en Productos (no se descuentan): ' + Object.keys(faltan).slice(0, 8).join(', ') + '' + NL + NL + '';
+  msg += '¿Descontar ahora?';
+  if(!confirm(msg)) return;
+  var negativos = [];
+  pend.forEach(function(p){ var r = descontarStockBoleta(p); r.negativos.forEach(function(n){ if(negativos.indexOf(n) < 0) negativos.push(n); }); });
+  registrarActividad('stock', 'Descontó stock de ' + pend.length + ' boletas anteriores', nombres.length + ' productos, ' + unidades + ' unidades');
+  guardar().then(function(){
+    if(!ultimoGuardadoOk) alert('El stock se descontó SOLO en esta computadora: no se pudo guardar en el servidor. No refresques; esperá y volvé a intentar guardar.');
+  });
+  renderPresupuestos(); if(typeof renderProductos === 'function') renderProductos(); renderDashboard();
+  alert('Listo: se descontó el stock de ' + pend.length + ' boletas.' + (negativos.length ? ' Quedaron con stock negativo: ' + negativos.slice(0, 10).join(', ') : ''));
+}
 let editPresIdx = null;
 let presClienteSnapshot = null;
 function editarPresupuesto(idx){
@@ -1584,15 +1647,18 @@ function guardarEdicionPresupuesto(lineas, subtotal, cliente, deuda){
   else p.cliente = null;
   p.fecha = document.getElementById('pres-fecha').value;
   p.obs = document.getElementById('pres-obs').value.trim();
+  var teniaStock = !!p.stock_aplicado;
+  if(teniaStock) devolverStockBoleta(p);
   p.lineas = lineas;
   p.subtotal = subtotal;
   p.deuda = deuda;
   p.total = nuevoTotal;
+  var rStockE = teniaStock && p.estado !== 'Rechazado' ? descontarStockBoleta(p) : {faltan:[],negativos:[]};
   registrarActividad('presupuesto', 'Editó boleta #' + p.numero, 'Cliente: ' + (p.cliente ? p.cliente.nombre : 'Consumidor final') + ' | Total: $' + fmt(totalAntes) + ' → $' + fmt(nuevoTotal));
   editPresIdx = null;
   presClienteSnapshot = null;
   cerrarModales();
-  renderPresupuestos(); renderDashboard(); renderDeudores(); renderAfavor();
+  renderPresupuestos(); renderDashboard(); renderDeudores(); renderAfavor(); if(typeof renderProductos === 'function') renderProductos(); avisoStock(rStockE);
   guardar().then(function(){
     if(!ultimoGuardadoOk) alert('Los cambios de la boleta quedaron SOLO en esta computadora: no se pudieron guardar en el servidor. Si refrescás la página se pierden. Esperá unos segundos y volvé a guardar.');
   });
@@ -2237,8 +2303,9 @@ function guardarPresupuesto(){
   db.presupuestos.unshift({ numero:num, fecha:document.getElementById('pres-fecha').value,
     validez:'', cliente:cliente?{...cliente}:null,
     obs:document.getElementById('pres-obs').value.trim(), lineas, subtotal, deuda, total:subtotal+deuda, estado:'Pendiente' });
+  var rStock = descontarStockBoleta(db.presupuestos[0]);
   registrarActividad('presupuesto',\`Creó boleta #\${num}\`,\`Cliente: \${cliente?.nombre||'Consumidor final'} | Total: $\${fmt(subtotal+deuda)}\`);
-  guardar(); cerrarModales(); renderPresupuestos(); renderDashboard();
+  guardar(); cerrarModales(); renderPresupuestos(); renderDashboard(); if(typeof renderProductos === 'function') renderProductos(); avisoStock(rStock);
 }
 function registrarActividad(tipo, accion, detalle){
   if(!db.actividad) db.actividad=[];
@@ -2308,6 +2375,8 @@ function cambiarEstado(idx,val){
   const p=db.presupuestos[idx];
   const anterior=p.estado;
   p.estado=val;
+  if(val==='Rechazado' && p.stock_aplicado) devolverStockBoleta(p);
+  else if(anterior==='Rechazado' && val!=='Rechazado' && !p.stock_aplicado && (p.lineas||[]).length) avisoStock(descontarStockBoleta(p));
   registrarActividad('presupuesto',\`Cambio estado boleta #\${p.numero}\`,\`\${anterior} → \${val} | Cliente: \${p.cliente?.nombre||'Consumidor final'}\`);
   guardar();
 }
@@ -2316,8 +2385,9 @@ function eliminarPresupuesto(idx){
   if(!confirm('¿Eliminar?'))return;
   const p=db.presupuestos[idx];
   registrarActividad('eliminacion',\`Eliminó boleta #\${p.numero}\`,\`Cliente: \${p.cliente?.nombre||'Consumidor final'} | Total: $\${fmt(p.total)}\`);
+  if(p.stock_aplicado) devolverStockBoleta(p);
   db.presupuestos.splice(idx,1);
-  guardar();renderPresupuestos();renderDashboard();
+  guardar();renderPresupuestos();renderDashboard(); if(typeof renderProductos === 'function') renderProductos();
 }
 function limpiarFechasPres(){
   document.getElementById('pres-desde').value='';

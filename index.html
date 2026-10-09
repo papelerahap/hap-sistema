@@ -766,6 +766,10 @@ tbody tr:hover td { background: var(--bg); }
               <label>Contraseña (opcional)</label>
               <input type="password" id="emp-nuevo-pass" placeholder="Sin contraseña = acceso libre">
             </div>
+            <div class="form-group" style="margin:0;min-width:150px">
+              <label>Nivel</label>
+              <select id="emp-nuevo-nivel"><option value="empleado">Empleado</option><option value="caja">Empleado + Caja</option><option value="socio">Socio (todo)</option></select>
+            </div>
             <button class="btn btn-primary" onclick="agregarEmpleado()">+ Agregar</button>
           </div>
         </div>
@@ -1131,6 +1135,26 @@ const SECCIONES_ADMIN    = ['dashboard','productos','listas','clientes','presupu
 function getPassword(){ return db.config?.password || '1234'; }
 
 let nombreUsuarioActual = '';
+let nivelActual = 'empleado';   // 'admin' | 'socio' | 'caja' | 'empleado'
+let esSocioLogin = false;       // true = entró como socio (acceso total, pero no puede borrar/editar socios)
+var NIVELES_POR_DEFECTO = { hugo: 'caja', ale: 'caja', tute: 'socio' };
+function nivelDe(emp){
+  if(emp && emp.nivel) return emp.nivel;
+  var n = emp && emp.nombre ? emp.nombre.trim().toLowerCase() : '';
+  return NIVELES_POR_DEFECTO[n] || 'empleado';
+}
+function esAdminReal(){ return rolActual === 'admin' && !esSocioLogin; }
+function aplicarNivelLogin(emp){
+  nivelActual = nivelDe(emp);
+  esSocioLogin = nivelActual === 'socio';
+  rolActual = esSocioLogin ? 'admin' : 'empleado';
+  nombreUsuarioActual = emp.nombre;
+}
+function seccionesPermitidas(){
+  if(rolActual === 'admin') return SECCIONES_ADMIN;
+  if(nivelActual === 'caja') return SECCIONES_EMPLEADO.concat(['caja']);
+  return SECCIONES_EMPLEADO;
+}
 
 function renderLoginEmpleados(){
   const empleados = db.empleados || [{nombre:'Empleado', pass:'', codigo:''}];
@@ -1159,8 +1183,7 @@ function renderLoginEmpleados(){
 async function entrarComoEmpleado(idx=0){
   const empleados = db.empleados || [{nombre:'Empleado', pass:'', codigo:''}];
   const emp = empleados[idx] || empleados[0];
-  rolActual = 'empleado';
-  nombreUsuarioActual = emp.nombre;
+  aplicarNivelLogin(emp);
   codigoVendedorActual = emp.codigo || '';
   await cargarDesdeServidor();
   iniciarApp();
@@ -1183,8 +1206,7 @@ async function verificarEmpleado(){
   const emp = empleados[idx];
   if(!emp) return;
   if(document.getElementById('login-pass').value === emp.pass){
-    rolActual = 'empleado';
-    nombreUsuarioActual = emp.nombre;
+    aplicarNivelLogin(emp);
     codigoVendedorActual = emp.codigo || '';
     document.getElementById('login-error').style.display='none';
     iniciarApp();
@@ -1205,7 +1227,7 @@ async function verificarAdmin(){
   const pass = document.getElementById('login-pass').value;
   await cargarDesdeServidor();
   if(pass === getPassword()){
-    rolActual = 'admin';
+    rolActual = 'admin'; esSocioLogin = false; nivelActual = 'admin';
     document.getElementById('login-error').style.display='none';
     iniciarApp();
   } else {
@@ -1217,7 +1239,7 @@ function iniciarApp(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('main-app').style.display='flex';
   const badge = document.getElementById('rol-badge');
-  if(rolActual==='admin'){
+  if(rolActual==='admin' && !esSocioLogin){
     badge.textContent='Admin'; badge.className='rol-badge rol-admin';
   } else {
     badge.textContent=nombreUsuarioActual||'Empleado'; badge.className='rol-badge rol-emp';
@@ -1238,7 +1260,7 @@ function aplicarRol(){
   itemsAdmin.forEach(sec=>{
     document.querySelectorAll(`.nav-item`).forEach(el=>{
       if(el.getAttribute('onclick')?.includes(`'${sec}'`)){
-        el.style.display = esAdmin ? '' : 'none';
+        el.style.display = (esAdmin || (sec==='caja' && nivelActual==='caja')) ? '' : 'none';
       }
     });
   });
@@ -1258,7 +1280,7 @@ async function sincronizar(){
 }
 
 function cerrarSesion(){
-  rolActual=null;
+  rolActual=null; esSocioLogin=false; nivelActual='empleado';
   nombreUsuarioActual='';
   document.getElementById('main-app').style.display='none';
   document.getElementById('login-screen').style.display='flex';
@@ -1355,7 +1377,7 @@ async function cargarDesdeServidor() {
 cargar();
 
 function showSection(id, el) {
-  const permitidas = rolActual==='admin' ? SECCIONES_ADMIN : SECCIONES_EMPLEADO;
+  const permitidas = seccionesPermitidas();
   if(!permitidas.includes(id)) return;
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -2419,19 +2441,23 @@ function registrarActividad(tipo, accion, detalle){
   db.actividad.unshift({
     fecha: ahora.toLocaleDateString('es-AR'),
     hora: ahora.toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit'}),
-    usuario: rolActual==='admin' ? 'Admin' : (nombreUsuarioActual||'Empleado'),
+    usuario: (rolActual==='admin' && !esSocioLogin) ? 'Admin' : (nombreUsuarioActual||'Empleado'),
     tipo, accion, detalle
   });
   if(db.actividad.length > 500) db.actividad = db.actividad.slice(0, 500);
 }
 
 // ---- GESTIÓN DE EMPLEADOS ----
+function puedeGestionarEmpleado(emp){ return nivelDe(emp) !== 'socio' || esAdminReal(); }
 async function agregarEmpleado(){
   const nombre = document.getElementById('emp-nuevo-nombre').value.trim();
   if(!nombre){ alert('Ingresá el nombre'); return; }
   if(!db.empleados) db.empleados=[];
   const pass = document.getElementById('emp-nuevo-pass').value.trim();
-  db.empleados.push({ nombre, pass });
+  var selN = document.getElementById('emp-nuevo-nivel');
+  var nivel = selN ? selN.value : 'empleado';
+  if(nivel === 'socio' && !esAdminReal()){ alert('Solo el administrador puede crear un socio.'); return; }
+  db.empleados.push({ nombre, pass, nivel });
   document.getElementById('emp-nuevo-nombre').value='';
   document.getElementById('emp-nuevo-pass').value='';
   await guardar();
@@ -2439,6 +2465,9 @@ async function agregarEmpleado(){
   renderLoginEmpleados();
 }
 async function eliminarEmpleado(idx){
+  var e = db.empleados[idx];
+  if(!e) return;
+  if(!puedeGestionarEmpleado(e)){ alert('Solo el administrador puede eliminar a un socio.'); return; }
   if(!confirm('¿Eliminar este empleado?')) return;
   db.empleados.splice(idx,1);
   await guardar();
@@ -2447,34 +2476,49 @@ async function eliminarEmpleado(idx){
 }
 async function editarEmpleado(idx){
   const e = db.empleados[idx];
+  if(!puedeGestionarEmpleado(e)){ alert('Solo el administrador puede modificar a un socio.'); return; }
   const nombre = prompt('Nuevo nombre:', e.nombre);
   if(nombre===null) return;
   const pass = prompt('Nueva contraseña (vacío = sin contraseña):', e.pass||'');
   if(pass===null) return;
-  db.empleados[idx] = { nombre: nombre.trim(), pass: pass.trim() };
+  db.empleados[idx] = Object.assign({}, e, { nombre: nombre.trim(), pass: pass.trim() });
   await guardar();
   renderListaEmpleados();
   renderLoginEmpleados();
+}
+async function cambiarNivelEmpleado(idx, nivel){
+  var e = db.empleados[idx];
+  if(!e) return;
+  if((nivel === 'socio' || nivelDe(e) === 'socio') && !esAdminReal()){
+    alert('Solo el administrador puede cambiar el nivel de un socio.');
+    renderListaEmpleados();
+    return;
+  }
+  e.nivel = nivel;
+  await guardar();
+  renderListaEmpleados();
 }
 function renderListaEmpleados(){
   if(!db.empleados) db.empleados=[];
   const cont = document.getElementById('lista-empleados');
   if(!cont) return;
-  const totalDeuda = db.presupuestos.filter(p=>p.estado==='Pendiente').reduce((sum,p)=>sum+saldoDeuda(p),0);
-  const totalFavor = db.presupuestos.reduce((sum,p)=>sum+saldoAFavor(p),0);
   if(!db.empleados.length){
     cont.innerHTML='<div style="font-size:13px;color:var(--text3);margin-bottom:8px">Sin empleados. Agregá el primero.</div>';
     return;
   }
-  cont.innerHTML = db.empleados.map((e,i)=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
-      <span style="font-size:13px;font-weight:600;flex:1">👤 ${e.nombre}</span>
-      <span style="font-size:12px;color:var(--text3)">${e.pass?'Con contraseña':'Sin contraseña'}</span>
-      <button class="btn btn-sm" style="background:var(--red-light);color:var(--red);border-color:var(--red);font-weight:700" onclick="showSection('deudores',document.querySelector('.nav-item[onclick*=deudores]'))">🔴 $${fmt(totalDeuda)}</button>
-      <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border-color:var(--green);font-weight:700" onclick="showSection('afavor',document.querySelector('.nav-item[onclick*=afavor]'))">🟢 $${fmt(totalFavor)}</button>
-      <button class="btn btn-sm" onclick="editarEmpleado(${i})">✏️</button>
-      <button class="btn btn-sm btn-danger" onclick="eliminarEmpleado(${i})">🗑️</button>
-    </div>`).join('');
+  var NIV = [['empleado','Empleado'],['caja','Empleado + Caja'],['socio','Socio (todo)']];
+  cont.innerHTML = db.empleados.map(function(e, i){
+    var puede = puedeGestionarEmpleado(e);
+    var niv = nivelDe(e);
+    var opts = NIV.map(function(n){ return '<option value="' + n[0] + '"' + (niv === n[0] ? ' selected' : '') + '>' + n[1] + '</option>'; }).join('');
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">' +
+      '<span style="font-size:13px;font-weight:600;flex:1">👤 ' + e.nombre + '</span>' +
+      '<select ' + (puede ? '' : 'disabled ') + 'onchange="cambiarNivelEmpleado(' + i + ', this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:var(--radius)">' + opts + '</select>' +
+      '<span style="font-size:12px;color:var(--text3)">' + (e.pass ? 'Con contraseña' : 'Sin contraseña') + '</span>' +
+      '<button class="btn btn-sm" ' + (puede ? '' : 'disabled ') + 'onclick="editarEmpleado(' + i + ')">✏️</button>' +
+      '<button class="btn btn-sm btn-danger" ' + (puede ? '' : 'disabled ') + 'onclick="eliminarEmpleado(' + i + ')">🗑️</button>' +
+      '</div>';
+  }).join('');
 }
 
 function cambiarEstado(idx,val){
@@ -2724,7 +2768,7 @@ function restaurarBackup(inp){
   rd.readAsText(file);
 }
 async function guardarConfig(){
-  const nuevaPass = document.getElementById('cfg-pass')?.value?.trim();
+  const nuevaPass = esSocioLogin ? '' : document.getElementById('cfg-pass')?.value?.trim();
   db.config={ 
     nombre:document.getElementById('cfg-nombre').value.trim(), 
     cuit:document.getElementById('cfg-cuit').value.trim(),
@@ -3068,6 +3112,7 @@ function renderCaja(){
     <td style="color:var(--red);font-weight:600">${m.tipo==='salida'?'$'+fmt(m.monto):'—'}</td>
     <td><button class="btn btn-sm btn-danger" onclick="eliminarMovimiento(${i})">🗑️</button></td>
   </tr>`).join('');
+  if(rolActual!=='admin') t.querySelectorAll('.btn-danger').forEach(function(b){ b.remove(); });
 }
 
 async function guardarCostoProv(prodIdx){
@@ -3674,6 +3719,7 @@ function confirmarPedido(){
 }
 
 function eliminarMovimiento(idx){
+  if(rolActual!=='admin'){ alert('No tenés permiso para eliminar movimientos de caja.'); return; }
   if(!confirm('¿Eliminar este movimiento de la caja?'))return;
   db.caja.splice(idx,1); guardar(); renderCaja();
 }

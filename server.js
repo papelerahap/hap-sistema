@@ -258,6 +258,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
       <div class="nav-item" onclick="showSection('listas',this)">💲 Listas de precios</div>
       <div class="nav-item" onclick="showSection('clientes',this)">👥 Clientes</div>
       <div class="nav-item" onclick="showSection('presupuestos',this)">📋 Presupuestos</div>
+      <div class="nav-item" onclick="showSection('entrega',this)">📦 Pendiente de entrega</div>
       <div class="nav-item" onclick="showSection('deudores',this)">🔴 Deudores</div>
       <div class="nav-item" onclick="showSection('afavor',this)">🟢 A favor</div>
       <div class="nav-item" onclick="showSection('proveedores',this)">🏭 Proveedores</div>
@@ -446,6 +447,23 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
       <div class="card">
         <table><thead><tr><th>N°</th><th>Fecha</th><th>Cliente</th><th>Deuda ant.</th><th>Total</th><th>Estado</th><th></th></tr></thead>
         <tbody id="tabla-presupuestos"></tbody></table>
+      </div>
+    </div>
+
+    <!-- PENDIENTE DE ENTREGA -->
+    <div id="entrega" class="section">
+      <div class="section-header">
+        <h2>Pendiente de entrega 📦</h2>
+        <span id="entrega-total" style="font-size:13px;color:var(--text2);font-weight:600"></span>
+      </div>
+      <div style="margin-bottom:10px"><input type="search" id="entrega-buscar" placeholder="🔍 Buscar por cliente o número de boleta..." oninput="renderEntrega()" style="width:100%;max-width:420px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px"></div>
+      <div class="card">
+        <table>
+          <thead><tr>
+            <th>N°</th><th>Fecha</th><th>Cliente</th><th>Total</th><th>Pago</th><th></th>
+          </tr></thead>
+          <tbody id="tabla-entrega"></tbody>
+        </table>
       </div>
     </div>
 
@@ -1193,8 +1211,8 @@ function alternarTema(){
 (function(){ var t = 'claro'; try { t = localStorage.getItem('hap_tema') || 'claro'; } catch(e) {} aplicarTema(t); })();
 let rolActual = null; // 'admin' | 'empleado'
 
-const SECCIONES_EMPLEADO = ['dashboard','clientes','presupuestos','deudores','afavor','proveedores'];
-const SECCIONES_ADMIN    = ['dashboard','productos','listas','clientes','presupuestos','deudores','afavor','caja','proveedores','ganancia','ventas','actividad','config'];
+const SECCIONES_EMPLEADO = ['dashboard','clientes','presupuestos','entrega','deudores','afavor','proveedores'];
+const SECCIONES_ADMIN    = ['dashboard','productos','listas','clientes','presupuestos','entrega','deudores','afavor','caja','proveedores','ganancia','ventas','actividad','config'];
 
 function getPassword(){ return db.config?.password || '1234'; }
 
@@ -1346,7 +1364,7 @@ async function sincronizar(){
   if(btn) btn.textContent = '⏳';
   await cargarDesdeServidor();
   const secActiva = document.querySelector('.section.active')?.id;
-  const renders = { dashboard: renderDashboard, productos: ()=>renderProductos(), clientes: ()=>renderClientes(), presupuestos: renderPresupuestos, deudores: renderDeudores, afavor: renderAfavor, caja: renderCaja, proveedores: renderProveedores, actividad: renderActividad };
+  const renders = { dashboard: renderDashboard, productos: ()=>renderProductos(), clientes: ()=>renderClientes(), presupuestos: renderPresupuestos, entrega: renderEntrega, deudores: renderDeudores, afavor: renderAfavor, caja: renderCaja, proveedores: renderProveedores, actividad: renderActividad };
   if(secActiva && renders[secActiva]) try{ renders[secActiva](); }catch(e){}
   if(btn) btn.textContent = '🔄';
 }
@@ -1463,7 +1481,7 @@ function showSection(id, el) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   el.classList.add('active');
-  ({ dashboard: renderDashboard, productos: ()=>renderProductos(), clientes: ()=>renderClientes(), listas: ()=>renderLista(), presupuestos: renderPresupuestos, deudores: renderDeudores, afavor: renderAfavor, caja: renderCaja, proveedores: renderProveedores, ganancia: ()=>{}, ventas: iniciarVentas, actividad: renderActividad, config: cargarConfig })[id]?.();
+  ({ dashboard: renderDashboard, productos: ()=>renderProductos(), clientes: ()=>renderClientes(), listas: ()=>renderLista(), presupuestos: renderPresupuestos, entrega: renderEntrega, deudores: renderDeudores, afavor: renderAfavor, caja: renderCaja, proveedores: renderProveedores, ganancia: ()=>{}, ventas: iniciarVentas, actividad: renderActividad, config: cargarConfig })[id]?.();
 }
 
 let editIdx = null;
@@ -3048,9 +3066,7 @@ function renderPresupuestos(){
       <td>\${p.cliente?p.cliente.nombre:'Consumidor final'}\${codBadge}</td>
       <td style="font-size:12px;color:var(--text2)">$\${fmt(p.deuda)}</td>
       <td><strong>$\${fmt(p.total)}</strong></td>
-      <td><select onchange="cambiarEstado(\${i},this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2)">
-        \${['Pendiente','Aprobado','Rechazado','Vencido'].map(e=>\`<option\${p.estado===e?' selected':''}>\${e}</option>\`).join('')}
-      </select></td>
+      <td>\${p.estado==='Aprobado'?'<span class="badge badge-ok">Cobrada</span>':'<span class="badge badge-low">Pendiente</span>'}</td>
       <td style="white-space:nowrap">
         <button class="btn btn-sm" onclick="editarPresupuesto(\${i})">✏️ Editar</button>
         <button class="btn btn-sm btn-green" onclick="imprimirPresupuesto(\${i})">🖨️ Imprimir</button>
@@ -3079,6 +3095,11 @@ function ajustarTextoImpresion(){
 
 function imprimirPresupuesto(idx){
   const p=db.presupuestos[idx], cfg=db.config;
+  if(!p.impreso){
+    p.impreso=true; p.fecha_impresion=new Date().toISOString();
+    try{ guardar(); }catch(e){}
+    try{ if(document.getElementById('entrega').classList.contains('active')) renderEntrega(); }catch(e){}
+  }
   const empresa=cfg.nombre||'Distribuidora HAP';
   const numStr=String(p.numero).padStart(6,'0');
   const fechaFmt=p.fecha?new Date(p.fecha+'T12:00:00').toLocaleDateString('es-AR'):'';
@@ -3253,6 +3274,50 @@ async function guardarConfig(){
   const ok=document.getElementById('cfg-ok'); ok.style.display='inline'; setTimeout(()=>ok.style.display='none',2500);
 }
 
+// ---- PENDIENTE DE ENTREGA ----
+function renderEntrega(){
+  var t=document.getElementById('tabla-entrega'); if(!t) return;
+  var qEl=document.getElementById('entrega-buscar');
+  var q=qEl?qEl.value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''):'';
+  var lista=db.presupuestos.filter(function(p){
+    if(!p.impreso||p.entregado||p.estado==='Rechazado') return false;
+    if(!q) return true;
+    var txt=((p.cliente?p.cliente.nombre:'Consumidor final')+' '+p.numero).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    return q.split(' ').every(function(w){ return txt.indexOf(w)>-1; });
+  });
+  lista.sort(function(a,b){ return String(a.fecha_impresion||'').localeCompare(String(b.fecha_impresion||'')); });
+  document.getElementById('entrega-total').textContent=lista.length?(lista.length+' boleta'+(lista.length>1?'s':'')+' por entregar'):'Nada pendiente de entrega';
+  if(!lista.length){ t.innerHTML='<tr class="empty-row"><td colspan="6">Sin boletas pendientes de entrega</td></tr>'; return; }
+  t.innerHTML=lista.map(function(p){
+    var i=db.presupuestos.indexOf(p);
+    var pag=(p.pagos||[]).reduce(function(a,x){return a+x.monto;},0), sal=saldoPendienteBoleta(p);
+    var imp=sal<=0.01?'<span class="badge badge-ok">Pagada</span>':(pag>0?'<span class="badge badge-low">Pagó $'+fmt(pag)+' · debe $'+fmt(sal)+'</span>':'<span class="badge badge-out">Debe $'+fmt(sal)+'</span>');
+    return '<tr><td><strong>'+p.numero+'</strong></td>'+
+      '<td style="font-size:12px">'+(p.fecha?new Date(p.fecha+'T12:00:00').toLocaleDateString('es-AR'):'')+'</td>'+
+      '<td><strong>'+(p.cliente?p.cliente.nombre:'Consumidor final')+'</strong></td>'+
+      '<td><strong>$'+fmt(p.total)+'</strong></td>'+
+      '<td>'+imp+'</td>'+
+      '<td style="white-space:nowrap"><button class="btn btn-sm btn-green" onclick="entregarPagado('+i+')">✅ Entregado y pagado</button> '+
+      '<button class="btn btn-sm btn-primary" onclick="marcarEntregado('+i+')" title="Pasa a Deudores con lo que falte cobrar">📦 Entregado, queda deuda</button> '+
+      '<button class="btn btn-sm" onclick="abrirModalPago('+i+')">💲 Pago</button> '+
+      '<button class="btn btn-sm" onclick="imprimirPresupuesto('+i+')">🖨️</button></td></tr>';
+  }).join('');
+}
+function entregarPagado(idx){
+  var p=db.presupuestos[idx]; if(!p) return;
+  if(saldoPendienteBoleta(p)>0.01){
+    cobrarPresupuesto(idx);
+    if(p.estado!=='Aprobado') return;
+  } else p.estado='Aprobado';
+  marcarEntregado(idx);
+}
+function marcarEntregado(idx){
+  var p=db.presupuestos[idx]; if(!p) return;
+  p.entregado=true; p.fecha_entrega=new Date().toISOString();
+  registrarActividad('presupuesto','Entregó boleta #'+p.numero,'Cliente: '+(p.cliente?p.cliente.nombre:'Consumidor final'));
+  guardar(); renderEntrega(); try{ renderDeudores(); renderPresupuestos(); }catch(e){}
+}
+
 // ---- DEUDORES ----
 let filtroCodDeudor = '';
 function setFiltroDeudor(cod, el){
@@ -3265,6 +3330,7 @@ function renderDeudores(){
   renderFiltrosListas();
   const pendientes=db.presupuestos.filter(p=>{
     if(p.estado!=='Pendiente') return false;
+    if(p.impreso&&!p.entregado) return false;
     if(filtroCodDeudor==='') return true;
     const cod=(p.cliente?.codigo||'').toUpperCase();
     if(filtroCodDeudor==='SIN') return !cod;
@@ -3398,7 +3464,7 @@ function confirmarPago(){
     desc: \`Cobro boleta #\${p.numero}\${p.cliente?' — '+p.cliente.nombre:''}\${nota?' ('+nota+')':''}\`,
     monto
   });
-  guardar(); cerrarModales(); renderDeudores(); renderAfavor(); renderDashboard(); renderPresupuestos();
+  guardar(); cerrarModales(); renderDeudores(); renderAfavor(); renderDashboard(); renderPresupuestos(); try{ renderEntrega(); }catch(e){}
 }
 
 function cobrarPresupuesto(idx){
@@ -4446,6 +4512,7 @@ setInterval(async () => {
       productos: ()=>renderProductos(),
       clientes: ()=>renderClientes(),
       presupuestos: renderPresupuestos,
+      entrega: renderEntrega,
       deudores: renderDeudores,
       afavor: renderAfavor,
       caja: renderCaja,

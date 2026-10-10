@@ -345,6 +345,8 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
           <div style="flex:1;min-width:180px">
             <input type="text" id="lista-search" class="inp" placeholder="Buscar producto o código..." oninput="filtrarListas()" style="width:100%">
           </div>
+          <span style="font-size:13px;color:var(--text2)">Ver la lista:</span>
+          <select id="lista-ver" class="inp" onchange="listasCambiarVista()" style="font-size:13px;width:auto"></select>
           <select id="lista-solosin" class="inp" onchange="filtrarListas()" style="font-size:13px;width:auto">
             <option value="">Ver todos los productos</option>
             <option value="0">Solo sin precio General</option>
@@ -356,15 +358,20 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
       <div class="card" style="margin-bottom:1rem">
         <div class="card-body" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <span style="font-size:13px;color:var(--text2)"><strong id="listas-selcount">0</strong> seleccionados</span>
-          <span style="font-size:13px;color:var(--text2)">Mismo precio en la lista</span>
-          <select id="listas-igual-lista" class="inp" style="font-size:13px;width:auto">
+          <span style="font-size:13px;color:var(--text2)">Poner precio en la lista</span>
+          <select id="listas-igual-lista" class="inp" style="font-size:13px;width:auto" onchange="listasMargenPrefill()">
             <option value="0">General</option>
             <option value="1">Gloria</option>
             <option value="2">Luis</option>
           </select>
-          <span style="font-size:13px;color:var(--text2)">: $</span>
-          <input type="text" inputmode="decimal" id="listas-igual" class="inp" style="width:110px;text-align:right" placeholder="0,00" onkeydown="if(event.key==='Enter') aplicarIgualListas()">
+          <span style="font-size:13px;color:var(--text2)">con margen sobre el costo</span>
+          <input type="text" inputmode="decimal" id="listas-margen" class="inp" style="width:70px;text-align:right" placeholder="ej: 30" title="Opcional. Precio = costo + este porcentaje" onkeydown="if(event.key==='Enter') aplicarIgualListas()">
+          <span style="font-size:13px;color:var(--text2)">%</span>
+          <span style="font-size:13px;color:var(--text3)">o precio fijo $</span>
+          <input type="text" inputmode="decimal" id="listas-igual" class="inp" style="width:100px;text-align:right" placeholder="opcional" onkeydown="if(event.key==='Enter') aplicarIgualListas()">
+          <label style="font-size:12px;color:var(--text2);white-space:nowrap" title="Los productos que no tengan precio en esta lista se calculan solos con este margen"><input type="checkbox" id="listas-recordar"> recordar este margen para la lista</label>
           <button class="btn btn-sm" onclick="aplicarIgualListas()">Aplicar a los marcados</button>
+          <span id="listas-margen-hint" style="font-size:12px;color:var(--text3);flex-basis:100%"></span>
           <span style="flex:1"></span>
           <span id="listas-cambios" style="font-size:13px;color:var(--text2)">Sin cambios</span>
           <button class="btn btn-primary" id="listas-guardar" onclick="guardarListas()">💾 Guardar todo</button>
@@ -1432,6 +1439,7 @@ async function cargarDesdeServidor() {
       if(!db.actividad)    db.actividad    = [];
       if(!db.empleados)    db.empleados    = [];
       if(!db.listas_precio) db.listas_precio = {};
+      if(!db.listas_margen) db.listas_margen = {};
       ordenarDatos();
       localStorage.setItem('hap_db', JSON.stringify(db));
       console.log('✅ Datos del servidor cargados');
@@ -2219,10 +2227,13 @@ function getPrecioParaCliente(nombreProd, precioBase){
   if(!listaClienteActual || listaClienteActual==='General') return precioBase||0;
   if(!db.listas_precio) return precioBase||0;
   const lista = db.listas_precio[listaClienteActual];
-  if(!lista) return precioBase||0;
+  if(!lista){ var pm0 = db.productos.find(function(x){ return x.nombre === nombreProd; }); var pa0 = pm0 ? precioListaAuto(pm0, listaClienteActual) : 0; return pa0 > 0 ? pa0 : (precioBase||0); }
   if(lista[nombreProd] !== undefined) return lista[nombreProd];
   const nombreLimpio = nombreProd.split(' – ')[0].trim();
   if(lista[nombreLimpio] !== undefined) return lista[nombreLimpio];
+  var pm = db.productos.find(function(x){ return x.nombre === nombreProd || x.nombre === nombreLimpio; });
+  var pa = pm ? precioListaAuto(pm, listaClienteActual) : 0;
+  if(pa > 0) return pa;
   return precioBase||0;
 }
 
@@ -2278,6 +2289,61 @@ function listasVisibles(){
     .filter(function(tr){ return tr.style.display !== 'none'; })
     .map(function(tr){ return parseInt(tr.getAttribute('data-k'), 10); });
 }
+var listasVerNombre = (function(){ try { var v = localStorage.getItem('hap_lista_ver'); return v === null ? 'General' : v; } catch(e) { return 'General'; } })();
+function precioListaAuto(prod, lista){
+  if(!prod || !lista || lista === 'General') return 0;
+  var m = db.listas_margen ? db.listas_margen[lista] : undefined;
+  if(m === undefined || m === null || m === '' || isNaN(Number(m))) return 0;
+  if(!(prod.costo > 0)) return 0;
+  return Math.round(prod.costo * (1 + Number(m) / 100));
+}
+function listasAplicarVista(){
+  var idx = listasVerNombre === '' ? -1 : LISTAS_COLS.indexOf(listasVerNombre);
+  if(listasVerNombre !== '' && idx < 0){ listasVerNombre = 'General'; idx = 0; }
+  var sel = document.getElementById('lista-ver');
+  if(sel) sel.value = idx < 0 ? '' : String(idx);
+  LISTAS_COLS.forEach(function(n, c){
+    var show = idx < 0 || idx === c;
+    Array.prototype.forEach.call(document.querySelectorAll('.lpc-' + c), function(el){ el.style.display = show ? '' : 'none'; });
+  });
+}
+function listasCambiarVista(){
+  var v = document.getElementById('lista-ver').value;
+  listasVerNombre = v === '' ? '' : LISTAS_COLS[parseInt(v, 10)];
+  try { localStorage.setItem('hap_lista_ver', listasVerNombre); } catch(e) {}
+  listasAplicarVista();
+  if(v !== ''){
+    var s1 = document.getElementById('listas-igual-lista');
+    if(s1) s1.value = v;
+    listasMargenPrefill();
+  }
+}
+function listasMargenPrefill(){
+  var c = parseInt(document.getElementById('listas-igual-lista').value, 10);
+  var nombre = LISTAS_COLS[c];
+  var hint = document.getElementById('listas-margen-hint');
+  var inp = document.getElementById('listas-margen');
+  var m;
+  if(nombre === 'General') m = (db.config && db.config.margenGeneral) ? db.config.margenGeneral : 30;
+  else m = db.listas_margen ? db.listas_margen[nombre] : undefined;
+  var hay = (m !== undefined && m !== null && m !== '');
+  if(inp) inp.value = hay ? fmtInp(Number(m)) : '';
+  if(hint){
+    if(nombre === 'General') hint.textContent = 'Margen de la lista General: ' + fmtInp(Number(m)) + '% sobre el costo (para los productos sin precio cargado).';
+    else hint.textContent = hay ? ('Margen guardado para la lista ' + nombre + ': ' + fmtInp(Number(m)) + '%. Los productos sin precio en esta lista se calculan solos con ese margen.') : ('La lista ' + nombre + ' no tiene margen guardado: los productos sin precio usan el precio General.');
+  }
+}
+function listasRefrescarPlaceholders(){
+  for(var k = 0; k < db.productos.length; k++){
+    for(var c = 0; c < LISTAS_COLS.length; c++){
+      var inp = document.getElementById('lp-in-' + k + '-' + c);
+      if(!inp) continue;
+      var lista = LISTAS_COLS[c];
+      var auto = lista === 'General' ? getPrecioGeneral(db.productos[k]) : precioListaAuto(db.productos[k], lista);
+      inp.placeholder = auto > 0 ? fmtInp(auto) : '—';
+    }
+  }
+}
 function renderLista(){
   var t = document.getElementById('tabla-lista');
   if(listasSucia && t.children.length) return; // no perder lo que se está escribiendo
@@ -2292,8 +2358,9 @@ function renderLista(){
     var auto = getPrecioGeneral(p);
     var celdas = LISTAS_COLS.map(function(lista, c){
       var v = listasActual(p, lista);
-      var ph = (lista === 'General' && auto > 0) ? fmtInp(auto) : '—';
-      return '<td style="text-align:right"><input type="text" inputmode="decimal" class="inp" id="lp-in-' + k + '-' + c + '" value="' + (v > 0 ? fmtInp(v) : '') + '" placeholder="' + ph + '" style="width:92px;text-align:right" oninput="listasCambio()" onpaste="listasPegar(event,' + k + ',' + c + ')" onkeydown="listasTecla(event,' + k + ',' + c + ')" onblur="listasNormalizar(' + k + ',' + c + ')"></td>';
+      var autoL = lista === 'General' ? auto : precioListaAuto(p, lista);
+      var ph = autoL > 0 ? fmtInp(autoL) : '—';
+      return '<td class="lpc-' + c + '" style="text-align:right"><input type="text" inputmode="decimal" class="inp" id="lp-in-' + k + '-' + c + '" value="' + (v > 0 ? fmtInp(v) : '') + '" placeholder="' + ph + '" style="width:92px;text-align:right" oninput="listasCambio()" onpaste="listasPegar(event,' + k + ',' + c + ')" onkeydown="listasTecla(event,' + k + ',' + c + ')" onblur="listasNormalizar(' + k + ',' + c + ')"></td>';
     }).join('');
     return '<tr data-k="' + k + '">' +
       '<td class="lp-sticky1"><input type="checkbox" class="lp-chk" onclick="listasClick(event,' + k + ')"></td>' +
@@ -2304,6 +2371,8 @@ function renderLista(){
   filtrarListas();
   listasSelCount();
   listasCambio();
+  listasAplicarVista();
+  listasMargenPrefill();
 }
 function filtrarListas(){
   var q = (document.getElementById('lista-search').value || '').toLowerCase().trim();
@@ -2380,6 +2449,7 @@ function listasPegar(e, k, c){
     if(kk === undefined) return;
     var cells = l.split(LISTAS_TAB);
     while(cells.length > 1 && cells[0].trim() !== '' && listasNum(cells[0]) === null) cells.shift(); // sin la columna del nombre
+    if(listasVerNombre !== '' && cells.length > 1) cells = cells.slice(cells.length - 1);
     if(cells.length > espacio) cells = cells.slice(cells.length - espacio);
     cells.forEach(function(cell, j){
       var v = listasNum(cell);
@@ -2419,22 +2489,47 @@ function listasSelTodos(on){
   });
   listasSelCount();
 }
-function aplicarIgualListas(){
+async function aplicarIgualListas(){
+  var m = listasNum(document.getElementById('listas-margen').value);
   var v = listasNum(document.getElementById('listas-igual').value);
-  if(v === null){ alert('Ingresá un precio válido'); return; }
   var c = parseInt(document.getElementById('listas-igual-lista').value, 10);
+  var lista = LISTAS_COLS[c];
+  var recordar = document.getElementById('listas-recordar').checked;
   var marcados = Array.prototype.slice.call(document.querySelectorAll('#tabla-lista .lp-chk:checked'));
-  if(!marcados.length){ alert('Primero marcá los productos que van a tener ese precio'); return; }
+  if(m === null && v === null){ alert('Poné un margen sobre el costo (%) o un precio fijo'); return; }
+  if(!marcados.length && !(recordar && m !== null)){ alert('Primero marcá los productos que van a tener ese precio'); return; }
+  var sinCosto = 0, puestos = 0;
   marcados.forEach(function(ch){
     var k = parseInt(ch.closest('tr').getAttribute('data-k'), 10);
-    document.getElementById('lp-in-' + k + '-' + c).value = fmtInp(v);
+    var precio = v;
+    if(m !== null){
+      var costo = db.productos[k] ? db.productos[k].costo : 0;
+      if(!(costo > 0)){ sinCosto++; ch.checked = false; return; }
+      precio = Math.round(costo * (1 + m / 100));
+    }
+    document.getElementById('lp-in-' + k + '-' + c).value = fmtInp(precio);
+    puestos++;
     ch.checked = false;
   });
+  if(recordar && m !== null){
+    if(lista === 'General'){ if(!db.config) db.config = {}; db.config.margenGeneral = m; }
+    else { if(!db.listas_margen) db.listas_margen = {}; db.listas_margen[lista] = m; }
+    try { await guardar(); } catch(e) {}
+    listasRefrescarPlaceholders();
+    listasMargenPrefill();
+  }
   document.getElementById('listas-igual').value = '';
   document.getElementById('listas-todos').checked = false;
   listasUltimoCheck = null;
   listasSelCount();
   listasCambio();
+  var lab = document.getElementById('listas-cambios');
+  var extra = [];
+  if(puestos) extra.push(puestos + ' precios puestos' + (m !== null ? ' con ' + fmtInp(m) + '% de margen' : ''));
+  if(sinCosto) extra.push(sinCosto + ' sin costo cargado (no se tocaron)');
+  if(recordar && m !== null) extra.push('margen recordado para ' + lista);
+  if(lab && extra.length) lab.textContent = lab.textContent + ' · ' + extra.join(' · ');
+  if(sinCosto) alert(sinCosto + ' producto(s) marcados no tienen costo cargado, por eso no se les calculó el precio.');
 }
 var LISTAS_MAL = '<>&"' + "'" + String.fromCharCode(96, 36, 92);
 function listasNombres(){
@@ -2459,9 +2554,11 @@ function listasArmarCabecera(){
   var h = '<th class="lp-sticky1"><input type="checkbox" id="listas-todos" onchange="listasSelTodos(this.checked)"></th><th class="lp-sticky2">Producto</th><th style="text-align:right">Costo</th>';
   LISTAS_COLS.forEach(function(n, c){
     var nCli = db.clientes.filter(function(x){ return x.lista_precio === n; }).length;
-    h += '<th style="text-align:right" data-lista="' + n + '"><div>' + n + '</div>' + (c > 0 ? '<div style="white-space:nowrap;margin-top:3px"><button class="btn btn-sm" title="Elegir qué clientes usan esta lista" onclick="abrirClientesLista(' + c + ')" style="padding:0 6px;font-size:11px">👥 ' + nCli + '</button> <button class="btn btn-sm btn-danger" title="Eliminar esta lista" onclick="eliminarListaPrecios(' + c + ')" style="padding:0 5px;font-size:11px">🗑</button></div>' : '') + '</th>';
+    h += '<th class="lpc-' + c + '" style="text-align:right" data-lista="' + n + '"><div>' + n + '</div>' + (c > 0 ? '<div style="white-space:nowrap;margin-top:3px"><button class="btn btn-sm" title="Elegir qué clientes usan esta lista" onclick="abrirClientesLista(' + c + ')" style="padding:0 6px;font-size:11px">👥 ' + nCli + '</button> <button class="btn btn-sm btn-danger" title="Eliminar esta lista" onclick="eliminarListaPrecios(' + c + ')" style="padding:0 5px;font-size:11px">🗑</button></div>' : '') + '</th>';
   });
   document.getElementById('listas-thead').innerHTML = '<tr>' + h + '</tr>';
+  var sv = document.getElementById('lista-ver');
+  if(sv) sv.innerHTML = '<option value="">Todas las listas</option>' + LISTAS_COLS.map(function(n, c){ return '<option value="' + c + '">' + n + '</option>'; }).join('');
   var s1 = document.getElementById('listas-igual-lista'), v1 = s1.value;
   s1.innerHTML = LISTAS_COLS.map(function(n, c){ return '<option value="' + c + '">' + n + '</option>'; }).join('');
   if(v1 !== '' && parseInt(v1, 10) < LISTAS_COLS.length) s1.value = v1;
@@ -2610,6 +2707,7 @@ async function crearListaPrecios(){
   }
   if(!db.listas_precio) db.listas_precio = {};
   db.listas_precio[nombre] = precios;
+  if(listasVerNombre !== '') { listasVerNombre = nombre; try { localStorage.setItem('hap_lista_ver', nombre); } catch(e) {} }
   try { await guardar(); } catch(e) {}
   inp.value = '';
   renderLista();
@@ -2636,6 +2734,7 @@ async function eliminarListaPrecios(c){
   if(!confirm(msg)) return;
   usan.forEach(function(x){ x.lista_precio = 'General'; });
   delete db.listas_precio[nombre];
+  if(db.listas_margen) delete db.listas_margen[nombre];
   try { await guardar(); } catch(e) {}
   renderLista();
 }

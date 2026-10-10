@@ -3311,7 +3311,7 @@ function renderDeudores(){
   });
   const totalSaldo=pendientes.reduce((a,p)=>a+saldoPendienteBoleta(p),0);
   document.getElementById('deudores-total').textContent=
-    pendientes.length?`${pendientes.length} boleta${pendientes.length>1?'s':''} — Saldo: $${fmt(totalSaldo)}`:'Sin deudores en este filtro';
+    pendientes.length?(rolActual==='admin'?`${pendientes.length} boleta${pendientes.length>1?'s':''} — Saldo: $${fmt(totalSaldo)}`:`${pendientes.length} boleta${pendientes.length>1?'s':''}`):'Sin deudores en este filtro';
   // Mostrar a favor debajo
   const totalFavor = db.presupuestos.reduce((sum,p)=>sum+saldoAFavor(p),0);
   const resumenFavor = document.getElementById('afavor-resumen');

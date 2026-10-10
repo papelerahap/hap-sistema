@@ -154,6 +154,19 @@ tbody tr:hover td { background: var(--bg); }
 .ac-empty { padding: 10px 12px; font-size: 13px; color: var(--text3); }
 
 /* ===== ESTILOS DE IMPRESIÓN ===== */
+.pg-scroll { max-height: 68vh; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg2); }
+.pg-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: 13px; }
+.pg-table th { position: sticky; top: 0; z-index: 2; background: var(--bg); color: var(--text3); font-size: 11px; text-transform: uppercase; padding: 8px 6px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.pg-table td { padding: 0; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); }
+.pg-table td.pg-n { padding: 0 6px; color: var(--text3); font-size: 11px; text-align: right; min-width: 34px; }
+.pg-in { width: 100%; box-sizing: border-box; border: 0; background: transparent; color: var(--text); padding: 7px 6px; font-size: 13px; font-family: inherit; }
+.pg-in:focus { outline: 2px solid var(--blue); outline-offset: -2px; background: var(--bg2); }
+.pg-in.pg-num { text-align: right; }
+.pg-in.pg-ch { background: var(--amber-light); }
+tr.pg-new td { background: var(--green-light); }
+tr.pg-del td { background: var(--red-light); }
+tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
+.pg-bar { position: sticky; bottom: 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 0; background: var(--bg); }
 @media print {
   :root[data-tema="oscuro"] { color-scheme: light; --bg: #f7f6f3; --bg2: #ffffff; --text: #1a1a18; --text2: #6b6a66; --text3: #9e9c97; --border: #e0ded9; --border2: #c8c6c0; --blue: #185FA5; --blue-light: #e6f1fb; --blue-text: #0C447C; --green: #3B6D11; --green-light: #EAF3DE; --amber: #854F0B; --amber-light: #FAEEDA; --red: #A32D2D; --red-light: #FCEBEB; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -295,15 +308,30 @@ tbody tr:hover td { background: var(--bg); }
     <div id="productos" class="section">
       <div class="section-header">
         <h2>Productos / Stock</h2>
-        <button class="btn btn-primary" onclick="abrirModalProducto()">+ Nuevo producto</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="pgAbrir()">📝 Editar todo en planilla</button><button class="btn btn-primary" onclick="abrirModalProducto()">+ Nuevo producto</button></div>
       </div>
-      <div class="search-wrap">
+      <div class="search-wrap" id="prod-lista-search">
         <span class="search-icon">🔍</span>
         <input type="text" placeholder="Buscar por nombre, código o categoría..." oninput="filtrarProductos(this.value)">
       </div>
-      <div class="card">
+      <div class="card" id="prod-lista-card">
         <table><thead><tr><th>Código</th><th>Producto</th><th>Categoría</th><th>Medida</th><th class="col-costo">P. costo</th><th>P. venta</th><th>Stock</th><th>Estado</th><th></th></tr></thead>
         <tbody id="tabla-productos"></tbody></table>
+      </div>
+      <div id="pg-wrap" style="display:none">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Cambiá lo que quieras directo en la tabla (como en Excel). Podés copiar celdas desde Excel y pegarlas en una casilla: se completan hacia abajo y hacia la derecha, y si pegás más filas de las que hay se crean productos nuevos. Cuando termines, apretá <strong>Guardar todo</strong>: se guarda una sola vez. Las casillas cambiadas se pintan de amarillo.</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <input type="search" id="pg-buscar" placeholder="🔍 Filtrar filas..." oninput="pgFiltrar()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;min-width:220px">
+          <button class="btn btn-sm" onclick="pgAgregarFilas(10)">+ 10 filas nuevas</button>
+          <span id="pg-cambios" style="font-size:12px;color:var(--text3)"></span>
+        </div>
+        <div class="pg-scroll"><table class="pg-table"><thead id="pg-thead"></thead><tbody id="pg-tbody"></tbody></table></div>
+        <datalist id="pg-dl-cat"></datalist><datalist id="pg-dl-prov"></datalist><datalist id="pg-dl-uni"></datalist>
+        <div class="pg-bar">
+          <button class="btn btn-primary" onclick="pgGuardar()">💾 Guardar todo</button>
+          <button class="btn" onclick="pgDescartar()">↩ Descartar cambios</button>
+          <button class="btn" onclick="pgCerrar()">← Volver a la lista</button>
+        </div>
       </div>
     </div>
 
@@ -1274,6 +1302,13 @@ function iniciarApp(){
     badge.textContent=nombreUsuarioActual||'Empleado'; badge.className='rol-badge rol-emp';
   }
   aplicarRol();
+  if(servidorConectado!==false){
+    var nIds = asegurarIdsProductos();
+    var nVin = vincularLineasAProductos();
+    var sn = sincronizarNombresBoletas();
+    if(sn.lineas){ registrarActividad('presupuesto','Sincronizó nombres de productos en boletas', sn.lineas + ' líneas en ' + sn.boletas + ' boletas'); }
+    if(nIds || nVin || sn.lineas){ guardar(); }
+  }
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('dashboard')?.classList.add('active');
@@ -1465,12 +1500,14 @@ function propagarRenombreProducto(viejo, nuevo){
   (db.presupuestos || []).forEach(function(b){
     var tocada = false;
     (b.lineas || []).forEach(function(l){
+      var porId = viejo.id && l.pid && l.pid === viejo.id;
       var porCod = viejo.codigo && l.cod && String(l.cod) === String(viejo.codigo);
       var porNombre = l.nombre === viejo.nombre && (!l.cod || !viejo.codigo || porCod);
-      if(porCod || porNombre){
+      if(porId || porCod || porNombre){
         var cambio = false;
         if(l.nombre !== nuevo.nombre){ l.nombre = nuevo.nombre; cambio = true; }
-        if(porCod && cambioCodigo){ l.cod = nuevo.codigo; cambio = true; }
+        if((porCod || (porId && l.cod && String(l.cod) === String(viejo.codigo))) && cambioCodigo){ l.cod = nuevo.codigo; cambio = true; }
+        if(!l.pid && nuevo.id){ l.pid = nuevo.id; }
         if(cambio){ res.lineas++; tocada = true; }
       }
     });
@@ -1500,7 +1537,8 @@ function guardarProducto() {
     stock:parseInt(document.getElementById('p-stock').value)||0, minimo:parseInt(document.getElementById('p-minimo').value)||5,
     proveedor:document.getElementById('p-proveedor').value||'' };
   var viejo = editIdx!==null ? db.productos[editIdx] : null;
-  var vcopy = viejo ? { nombre: viejo.nombre, codigo: viejo.codigo } : null;
+  p.id = (viejo && viejo.id) ? viejo.id : nuevoIdProd();
+  var vcopy = viejo ? { nombre: viejo.nombre, codigo: viejo.codigo, id: viejo.id } : null;
   if(editIdx!==null) db.productos[editIdx]=p; else db.productos.push(p);
   var rp = vcopy ? propagarRenombreProducto(vcopy, p) : { boletas: 0, lineas: 0, listas: 0 };
   if(rp.lineas || rp.listas){
@@ -1542,6 +1580,264 @@ function renderProductos(filtro=''){
   t.innerHTML = html;
 }
 function filtrarProductos(v){renderProductos(v);}
+// ---- PLANILLA DE PRODUCTOS (tipo Excel) ----
+var pgSucia = false;
+var pgNuevos = 0;
+var PG_COLS = [
+  { f: 'codigo', t: 'Código', w: 80, tipo: 'txt' },
+  { f: 'nombre', t: 'Producto', w: 250, tipo: 'txt' },
+  { f: 'categoria', t: 'Categoría', w: 150, tipo: 'txt', dl: 'pg-dl-cat' },
+  { f: 'medida', t: 'Medida', w: 170, tipo: 'txt' },
+  { f: 'unidad', t: 'Unidad', w: 80, tipo: 'txt', dl: 'pg-dl-uni' },
+  { f: 'costo', t: 'P. costo', w: 95, tipo: 'num' },
+  { f: 'precio', t: 'P. venta', w: 95, tipo: 'num' },
+  { f: 'stock', t: 'Stock', w: 80, tipo: 'num' },
+  { f: 'minimo', t: 'Mínimo', w: 75, tipo: 'num' },
+  { f: 'proveedor', t: 'Proveedor', w: 140, tipo: 'txt', dl: 'pg-dl-prov' }
+];
+function pgValorOrig(p, col){
+  var v = p[col.f];
+  if(col.tipo === 'num') return (v === undefined || v === null || v === '') ? '' : fmtInp(Number(v) || 0);
+  return v == null ? '' : String(v);
+}
+function pgFilaHtml(k, p, nuevo){
+  var h = '<tr data-k="' + k + '"' + (nuevo ? ' class="pg-new"' : '') + '><td class="pg-n">' + (nuevo ? '+' : (Number(k) + 1)) + '</td>';
+  PG_COLS.forEach(function(col, c){
+    var o = nuevo ? '' : pgValorOrig(p, col);
+    h += '<td style="min-width:' + col.w + 'px"><input class="pg-in' + (col.tipo === 'num' ? ' pg-num' : '') + '" data-c="' + c + '" data-o="' + String(o).split('"').join('&quot;') + '" value="' + String(o).split('"').join('&quot;') + '"' + (col.dl ? ' list="' + col.dl + '"' : '') + (col.tipo === 'num' ? ' inputmode="decimal"' : '') + ' oninput="pgInput(this)" onkeydown="pgTecla(event,this)" onpaste="pgPegar(event,this)"></td>';
+  });
+  h += '<td style="padding:0 6px;white-space:nowrap"><button class="btn btn-sm" title="Marcar para eliminar" onclick="pgEliminar(this)">🗑️</button></td></tr>';
+  return h;
+}
+function pgDatalist(id, valores){
+  var el = document.getElementById(id);
+  if(!el) return;
+  var vistos = {}, h = '';
+  valores.forEach(function(v){ v = String(v || '').trim(); if(v && !vistos[v]){ vistos[v] = true; h += '<option value="' + v.split('"').join('&quot;') + '"></option>'; } });
+  el.innerHTML = h;
+}
+function pgRender(){
+  var th = '<tr><th>#</th>' + PG_COLS.map(function(c){ return '<th>' + c.t + '</th>'; }).join('') + '<th></th></tr>';
+  document.getElementById('pg-thead').innerHTML = th;
+  document.getElementById('pg-tbody').innerHTML = db.productos.map(function(p, i){ return pgFilaHtml(i, p, false); }).join('');
+  pgDatalist('pg-dl-cat', db.productos.map(function(p){ return p.categoria; }).concat(['Bolsas camiseta', 'Bolsas de residuos', 'Film stretch', 'Rollos polietileno', 'Mangas / tubo', 'Bolsas autocierre', 'Bolsas de cultivo', 'Láminas polietileno', 'Otro']));
+  pgDatalist('pg-dl-prov', (db.proveedores || []).map(function(p){ return p.nombre; }).concat(db.productos.map(function(p){ return p.proveedor; })));
+  pgDatalist('pg-dl-uni', db.productos.map(function(p){ return p.unidad; }).concat(['unidad', 'caja', 'bulto', 'rollo', 'kg']));
+  pgNuevos = 0;
+  pgContar();
+}
+function pgAbrir(){
+  if(!pgSucia) pgRender();
+  document.getElementById('prod-lista-search').style.display = 'none';
+  document.getElementById('prod-lista-card').style.display = 'none';
+  document.getElementById('pg-wrap').style.display = 'block';
+}
+function pgCerrar(){
+  if(pgSucia && !confirm('Tenés cambios sin guardar. Si volvés a la lista se pierden. ¿Volver igual?')) return;
+  pgSucia = false;
+  document.getElementById('pg-wrap').style.display = 'none';
+  document.getElementById('prod-lista-search').style.display = '';
+  document.getElementById('prod-lista-card').style.display = '';
+  renderProductos();
+}
+function pgDescartar(){
+  if(pgSucia && !confirm('¿Descartar todos los cambios de la planilla?')) return;
+  pgSucia = false;
+  pgRender();
+}
+function pgContar(){
+  var tb = document.getElementById('pg-tbody');
+  var cambios = 0;
+  Array.prototype.forEach.call(tb.querySelectorAll('tr'), function(tr){
+    var k = tr.getAttribute('data-k');
+    if(tr.classList.contains('pg-del')){ cambios++; return; }
+    if(String(k).charAt(0) === 'n'){
+      var algo = false;
+      Array.prototype.forEach.call(tr.querySelectorAll('.pg-in'), function(i){ if(i.value.trim() !== '') algo = true; });
+      if(algo) cambios++;
+      return;
+    }
+    cambios += tr.querySelectorAll('.pg-in.pg-ch').length;
+  });
+  pgSucia = cambios > 0;
+  var el = document.getElementById('pg-cambios');
+  if(el){ el.textContent = cambios ? ('✏️ ' + cambios + ' cambio' + (cambios === 1 ? '' : 's') + ' sin guardar') : 'Sin cambios'; el.style.color = cambios ? 'var(--amber)' : 'var(--text3)'; }
+}
+function pgInput(inp){
+  if(inp.value !== inp.getAttribute('data-o')) inp.classList.add('pg-ch'); else inp.classList.remove('pg-ch');
+  pgContar();
+}
+function pgFilasVisibles(){
+  return Array.prototype.filter.call(document.querySelectorAll('#pg-tbody tr'), function(tr){ return tr.style.display !== 'none'; });
+}
+function pgTecla(e, inp){
+  var k = e.key;
+  if(k !== 'Enter' && k !== 'ArrowDown' && k !== 'ArrowUp') return;
+  var tr = inp.closest('tr');
+  var vis = pgFilasVisibles();
+  var pos = vis.indexOf(tr);
+  var dest = (k === 'ArrowUp') ? vis[pos - 1] : vis[pos + 1];
+  e.preventDefault();
+  if(!dest) return;
+  var n = dest.querySelector('.pg-in[data-c="' + inp.getAttribute('data-c') + '"]');
+  if(n){ n.focus(); n.select(); }
+}
+function pgAgregarFilas(n){
+  var tb = document.getElementById('pg-tbody');
+  var h = '';
+  for(var i = 0; i < n; i++){ pgNuevos++; h += pgFilaHtml('n' + pgNuevos, {}, true); }
+  tb.insertAdjacentHTML('beforeend', h);
+  var ult = tb.querySelectorAll('tr');
+  var primera = ult[ult.length - n];
+  if(primera){ var f = primera.querySelector('.pg-in[data-c="1"]'); if(f) f.focus(); }
+  pgContar();
+}
+function pgEliminar(btn){
+  var tr = btn.closest('tr');
+  var k = String(tr.getAttribute('data-k'));
+  if(k.charAt(0) === 'n'){ tr.remove(); pgContar(); return; }
+  tr.classList.toggle('pg-del');
+  btn.textContent = tr.classList.contains('pg-del') ? '↩' : '🗑️';
+  pgContar();
+}
+function pgFiltrar(){
+  var q = document.getElementById('pg-buscar').value.trim().toLowerCase();
+  Array.prototype.forEach.call(document.querySelectorAll('#pg-tbody tr'), function(tr){
+    if(!q){ tr.style.display = ''; return; }
+    var txt = Array.prototype.map.call(tr.querySelectorAll('.pg-in'), function(i){ return i.value; }).join(' ').toLowerCase();
+    var ok = q.split(' ').every(function(w){ return txt.indexOf(w) > -1; });
+    tr.style.display = ok ? '' : 'none';
+  });
+}
+function pgPegar(e, inp){
+  var cd = e.clipboardData || window.clipboardData;
+  var txt = cd ? cd.getData('text') : '';
+  var lines = txt.split(PL_NL).map(function(l){ return l.split(PL_CR).join(''); });
+  while(lines.length && lines[lines.length - 1] === '') lines.pop();
+  if(!lines.length) return;
+  if(lines.length === 1 && lines[0].indexOf(LISTAS_TAB) === -1) return; // un solo valor: pegado normal
+  e.preventDefault();
+  var c0 = parseInt(inp.getAttribute('data-c'), 10);
+  var vis = pgFilasVisibles();
+  var pos = vis.indexOf(inp.closest('tr'));
+  var faltan = (pos + lines.length) - vis.length;
+  if(faltan > 0){
+    pgAgregarFilas(faltan);
+    vis = pgFilasVisibles();
+  }
+  var puestos = 0;
+  lines.forEach(function(l, i){
+    var tr = vis[pos + i];
+    if(!tr) return;
+    var cells = l.split(LISTAS_TAB);
+    cells.forEach(function(cell, j){
+      var col = PG_COLS[c0 + j];
+      if(!col) return;
+      var dest = tr.querySelector('.pg-in[data-c="' + (c0 + j) + '"]');
+      if(!dest) return;
+      var v = cell.trim();
+      if(col.tipo === 'num'){
+        if(v === '') return;
+        var n = listasNum(v);
+        if(n === null) return;
+        v = fmtInp(n);
+      }
+      dest.value = v;
+      pgInput(dest);
+      puestos++;
+    });
+  });
+  var el = document.getElementById('pg-cambios');
+  if(el) el.textContent = el.textContent + ' · pegados ' + puestos + ' valores';
+}
+function pgLeerFila(tr){
+  var o = {};
+  PG_COLS.forEach(function(col, c){
+    var inp = tr.querySelector('.pg-in[data-c="' + c + '"]');
+    var v = inp ? inp.value.trim() : '';
+    if(col.tipo === 'num'){
+      var n = listasNum(v);
+      o[col.f] = (n === null) ? 0 : n;
+    } else o[col.f] = v;
+  });
+  return o;
+}
+async function pgGuardar(){
+  if(!pgSucia){ alert('No hay cambios para guardar.'); return; }
+  var filas = Array.prototype.slice.call(document.querySelectorAll('#pg-tbody tr'));
+  var modificados = [], nuevos = [], borrar = [], errores = [];
+  filas.forEach(function(tr, idx){
+    var k = String(tr.getAttribute('data-k'));
+    var esNuevo = k.charAt(0) === 'n';
+    if(!esNuevo && tr.classList.contains('pg-del')){ borrar.push(db.productos[parseInt(k, 10)]); return; }
+    var v = pgLeerFila(tr);
+    if(esNuevo){
+      var vacio = !v.nombre && !v.codigo && !v.medida && !v.categoria && !v.proveedor && !v.precio && !v.costo && !v.stock;
+      if(vacio) return;
+      if(!v.nombre){ errores.push('Fila nueva ' + (idx + 1) + ': falta el nombre'); return; }
+      nuevos.push(v);
+      return;
+    }
+    var p = db.productos[parseInt(k, 10)];
+    if(!p) return;
+    if(!v.nombre){ errores.push('Fila ' + (parseInt(k, 10) + 1) + ': el producto no puede quedar sin nombre'); return; }
+    var cambio = false;
+    PG_COLS.forEach(function(col){
+      var tr2 = tr.querySelector('.pg-in[data-c="' + PG_COLS.indexOf(col) + '"]');
+      if(tr2 && tr2.classList.contains('pg-ch')) cambio = true;
+    });
+    if(cambio) modificados.push({ p: p, v: v });
+  });
+  if(errores.length){ alert('No se guardó nada. Corregí esto:' + PL_NL + errores.slice(0, 10).join(PL_NL)); return; }
+  // nombres repetidos en el resultado final
+  var finales = {};
+  var repetidos = [];
+  var mod = new Map();
+  modificados.forEach(function(m){ mod.set(m.p, m.v); });
+  var fin = [];
+  db.productos.forEach(function(p){
+    if(borrar.indexOf(p) > -1) return;
+    fin.push(mod.has(p) ? mod.get(p).nombre : p.nombre);
+  });
+  nuevos.forEach(function(v){ fin.push(v.nombre); });
+  fin.forEach(function(n){
+    var kk = n.trim().toLowerCase();
+    if(finales[kk]){ if(repetidos.indexOf(n) < 0) repetidos.push(n); } else finales[kk] = true;
+  });
+  if(repetidos.length){ alert('No se guardó nada. Hay nombres de producto repetidos: ' + repetidos.slice(0, 8).join(', ') + '. Cada producto tiene que tener un nombre distinto.'); return; }
+  var renombres = modificados.filter(function(m){ return m.p.nombre !== m.v.nombre; }).length;
+  var msg = 'Se va a guardar: ' + modificados.length + ' producto' + (modificados.length === 1 ? '' : 's') + ' modificado' + (modificados.length === 1 ? '' : 's') + ', ' + nuevos.length + ' nuevo' + (nuevos.length === 1 ? '' : 's') + ' y ' + borrar.length + ' eliminado' + (borrar.length === 1 ? '' : 's') + '.';
+  if(renombres) msg += PL_NL + PL_NL + renombres + ' cambio' + (renombres === 1 ? '' : 's') + ' de nombre: también se actualiza en las boletas y en las listas de precios.';
+  if(borrar.length) msg += PL_NL + PL_NL + 'Los productos eliminados no se pueden recuperar (las boletas viejas los siguen mostrando con su nombre).';
+  msg += PL_NL + PL_NL + '¿Guardar?';
+  if(!confirm(msg)) return;
+  var tot = { boletas: 0, lineas: 0, listas: 0 };
+  modificados.forEach(function(m){
+    if(!m.p.id) m.p.id = nuevoIdProd();
+    var viejo = { nombre: m.p.nombre, codigo: m.p.codigo, id: m.p.id };
+    PG_COLS.forEach(function(col){ m.p[col.f] = m.v[col.f]; });
+    if(!m.p.unidad) m.p.unidad = 'unidad';
+    if(!m.p.categoria) m.p.categoria = 'Otro';
+    if(!m.p.minimo) m.p.minimo = 5;
+    var r = propagarRenombreProducto(viejo, m.p);
+    tot.boletas += r.boletas; tot.lineas += r.lineas; tot.listas += r.listas;
+  });
+  nuevos.forEach(function(v){
+    if(!v.unidad) v.unidad = 'unidad';
+    if(!v.categoria) v.categoria = 'Otro';
+    if(!v.minimo) v.minimo = 5;
+    v.id = nuevoIdProd();
+    db.productos.push(v);
+  });
+  if(borrar.length) db.productos = db.productos.filter(function(p){ return borrar.indexOf(p) < 0; });
+  registrarActividad('producto', 'Editó productos en planilla', modificados.length + ' modificados, ' + nuevos.length + ' nuevos, ' + borrar.length + ' eliminados' + (renombres ? ' | ' + renombres + ' renombrados (' + tot.lineas + ' líneas de boletas, ' + tot.listas + ' listas)' : ''));
+  pgSucia = false;
+  var ok = await guardar();
+  pgRender();
+  renderProductos(); renderProveedores(); renderDashboard();
+  if(!ok) alert('Los cambios quedaron SOLO en esta computadora: no se pudieron guardar en el servidor. No cierres la página y probá guardar de nuevo en unos segundos.');
+  else alert('Listo, se guardó todo en un solo paso.');
+}
 
 // ---- CLIENTES ----
 let editClienteIdx = null;
@@ -1693,9 +1989,27 @@ function acCliente(q){
 // Variable global que guarda la lista del cliente actual
 let listaClienteActual = null;
 // ---- STOCK POR BOLETA ----
+function nuevoIdProd(){ return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function asegurarIdsProductos(){
+  var n = 0;
+  db.productos.forEach(function(p){ if(!p.id){ p.id = nuevoIdProd(); n++; } });
+  return n;
+}
+function vincularLineasAProductos(){
+  var n = 0;
+  (db.presupuestos || []).forEach(function(b){
+    (b.lineas || []).forEach(function(l){
+      if(l.pid) return;
+      var i = prodDeLinea(l);
+      if(i >= 0 && db.productos[i].id){ l.pid = db.productos[i].id; n++; }
+    });
+  });
+  return n;
+}
 function prodDeLinea(l){
   var i = -1;
-  if(l.cod){ i = db.productos.findIndex(function(p){ return String(p.codigo) === String(l.cod); }); }
+  if(l.pid){ i = db.productos.findIndex(function(p){ return p.id === l.pid; }); }
+  if(i < 0 && l.cod){ i = db.productos.findIndex(function(p){ return String(p.codigo) === String(l.cod); }); }
   if(i < 0){ i = db.productos.findIndex(function(p){ return p.nombre === l.nombre; }); }
   return i;
 }
@@ -2459,6 +2773,7 @@ function guardarPresupuesto(){
     if(nombre&&cant>0){ const imp=cant*precio; lineas.push({cod,nombre,cant,precio,importe:imp}); subtotal+=imp; }
   });
   if(!lineas.length){alert('Agregá al menos un producto');return;}
+  lineas.forEach(function(l){ var ip = prodDeLinea(l); if(ip >= 0 && db.productos[ip].id) l.pid = db.productos[ip].id; });
   const cliIdxVal=document.getElementById('pres-cliente-idx').value;
   const cliente=cliIdxVal!==''?db.clientes[parseInt(cliIdxVal)]:null;
   const deuda=parseFloat(document.getElementById('pres-deuda').value)||0;
@@ -3801,7 +4116,7 @@ function mostrarGanancia(idx){
   document.getElementById('gan-deuda').textContent='$'+fmt(p.deuda||0);
   let costoTotal=0, ventaTotal=0, sinCosto=false;
   const filas=p.lineas.map(l=>{
-    const prod=db.productos.find(pr=>pr.nombre===l.nombre||(pr.nombre+(pr.medida?' – '+pr.medida:''))===l.nombre);
+    const prod=buscarProdDeLinea(l);
     const costo=prod?.costo||0;
     if(!costo) sinCosto=true;
     const sv=l.cant*l.precio, sc=l.cant*costo, gan=sv-sc;
@@ -3871,9 +4186,24 @@ function ventasFechasManual(){
   renderVentas();
 }
 function buscarProdDeLinea(l){
+  var i = prodDeLinea(l);
+  if(i >= 0) return db.productos[i];
   return db.productos.find(function(pr){
-    return pr.nombre === l.nombre || (pr.nombre + (pr.medida ? ' – ' + pr.medida : '')) === l.nombre;
+    return (pr.nombre + (pr.medida ? ' – ' + pr.medida : '')) === l.nombre;
   });
+}
+function sincronizarNombresBoletas(){
+  var n = 0, boletas = 0;
+  (db.presupuestos || []).forEach(function(b){
+    var t = false;
+    (b.lineas || []).forEach(function(l){
+      if(!l.pid && !l.cod) return;
+      var i = prodDeLinea(l);
+      if(i >= 0 && db.productos[i].nombre !== l.nombre){ l.nombre = db.productos[i].nombre; n++; t = true; }
+    });
+    if(t) boletas++;
+  });
+  return { lineas: n, boletas: boletas };
 }
 function renderVentas(){
   var desde = document.getElementById('ventas-desde').value;
@@ -3891,14 +4221,14 @@ function renderVentas(){
     if(estado === 'activas' && (p.estado === 'Rechazado' || p.estado === 'Vencido')) return;
     var cuenta = false;
     (p.lineas || []).forEach(function(l){
-      if(q && (l.nombre || '').toLowerCase().indexOf(q) === -1) return;
-      cuenta = true;
       var prod = buscarProdDeLinea(l);
+      if(q && ((prod ? prod.nombre : '') + ' ' + (l.nombre || '')).toLowerCase().indexOf(q) === -1) return;
+      cuenta = true;
       var costoU = prod ? (prod.costo || 0) : 0;
       var cant = l.cant || 0;
       var venta = cant * (l.precio || 0);
-      var key = l.nombre;
-      if(!filas[key]) filas[key] = { nombre: l.nombre, unidad: prod ? (prod.unidad || '') : '', uni: 0, venta: 0, costo: 0, sinCosto: false };
+      var key = prod ? 'P|' + prod.codigo + '|' + prod.nombre : l.nombre;
+      if(!filas[key]) filas[key] = { nombre: prod ? prod.nombre : l.nombre, unidad: prod ? (prod.unidad || '') : '', uni: 0, venta: 0, costo: 0, sinCosto: false };
       var f = filas[key];
       f.uni += cant;
       f.venta += venta;
@@ -3993,7 +4323,7 @@ function renderActividad(){
 setInterval(async () => {
   if(!rolActual) return; // solo si está logueado
   if(guardandoEnServidor) return; // no interferir si se está guardando
-  if(planillaSucia || listasSucia) return; // no pisar una planilla de costos con cambios sin guardar
+  if(planillaSucia || listasSucia || pgSucia) return; // no pisar una planilla de costos con cambios sin guardar
   await cargarDesdeServidor();
   try {
     const secActiva = document.querySelector('.section.active')?.id;

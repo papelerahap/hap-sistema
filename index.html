@@ -1364,8 +1364,14 @@ function cargar() {
   } catch(e) {
     db = JSON.parse(JSON.stringify(DB_DEFAULTS));
   }
+  try { ordenarDatos(); } catch(e) {}
 }
 
+function ordenarDatos(){
+  var cmp = function(a, b){ return String(a || '').localeCompare(String(b || ''), 'es', { sensitivity: 'base', numeric: true }); };
+  if(db.productos) db.productos.sort(function(a, b){ return cmp(a.nombre, b.nombre); });
+  if(db.proveedores) db.proveedores.sort(function(a, b){ return cmp(a.nombre, b.nombre); });
+}
 var servidorConectado = null;
 function avisoServidor(ok){
   servidorConectado = ok;
@@ -1421,6 +1427,7 @@ async function cargarDesdeServidor() {
       if(!db.actividad)    db.actividad    = [];
       if(!db.empleados)    db.empleados    = [];
       if(!db.listas_precio) db.listas_precio = {};
+      ordenarDatos();
       localStorage.setItem('hap_db', JSON.stringify(db));
       console.log('✅ Datos del servidor cargados');
     } else {
@@ -1534,6 +1541,7 @@ function guardarProducto() {
   if(rp.lineas || rp.listas){
     registrarActividad('presupuesto', 'Renombró producto: ' + vcopy.nombre + ' → ' + p.nombre, 'Actualizó ' + rp.lineas + ' líneas en ' + rp.boletas + ' boletas y ' + rp.listas + ' listas de precios');
   }
+  ordenarDatos();
   guardar(); cerrarModales(); renderProveedores(); renderDashboard();
   if(typeof renderProductos === 'function') renderProductos();
   if(rp.lineas || rp.listas) alert('Listo: el nombre nuevo se actualizó en ' + rp.boletas + ' boletas (' + rp.lineas + ' líneas) y en ' + rp.listas + ' listas de precios.');
@@ -1828,6 +1836,7 @@ async function pgGuardar(){
   if(borrar.length) db.productos = db.productos.filter(function(p){ return borrar.indexOf(p) < 0; });
   registrarActividad('producto', 'Editó productos en planilla', modificados.length + ' modificados, ' + nuevos.length + ' nuevos, ' + borrar.length + ' eliminados' + (renombres ? ' | ' + renombres + ' renombrados (' + tot.lineas + ' líneas de boletas, ' + tot.listas + ' listas)' : ''));
   pgSucia = false;
+  ordenarDatos();
   var ok = await guardar();
   pgRender();
   renderProductos(); renderProveedores(); renderDashboard();
@@ -3849,8 +3858,13 @@ function guardarProveedor(){
     notas:document.getElementById('prov-notas').value.trim()
   };
   if(!db.proveedores)db.proveedores=[];
-  if(editProvIdx!==null) db.proveedores[editProvIdx]=datos;
+  if(editProvIdx!==null){
+    var nomViejo = db.proveedores[editProvIdx] ? db.proveedores[editProvIdx].nombre : '';
+    db.proveedores[editProvIdx]=datos;
+    if(nomViejo && nomViejo !== datos.nombre) db.productos.forEach(function(p){ if(p.proveedor === nomViejo) p.proveedor = datos.nombre; });
+  }
   else db.proveedores.push(datos);
+  ordenarDatos();
   guardar(); cerrarModales(); renderProveedores();
 }
 function eliminarProveedor(idx){

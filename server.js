@@ -3999,6 +3999,7 @@ function confirmarAsignarProd(){
   db.productos[idx].proveedor=prov.nombre;
   const costo=parseFloat(document.getElementById('asignar-prod-costo').value)||0;
   if(costo>0) db.productos[idx].costo=costo;
+  ordenarDatos();
   guardar(); cerrarModales(); renderProveedores();
 }
 

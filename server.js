@@ -411,15 +411,13 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
         <button class="filtro-btn filtro-n" onclick="setFiltroCliente('SIN',this)">Sin asignar</button>
         <span id="clientes-count" style="font-size:12px;color:var(--text3);margin-left:4px"></span>
       </div>
-      <div class="btn-resumen-oficina" style="margin-bottom:12px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px">
-        <span style="font-size:12px;font-weight:600;color:var(--text2)">📊 Resumen de consumo</span>
+      <div id="barra-resumen" style="display:none;margin-bottom:12px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px">
+        <span id="res-titulo" style="font-size:12px;font-weight:600;color:var(--text2)">📊 Resumen de consumo</span>
         <label style="font-size:12px;color:var(--text2)">Desde</label>
         <input type="date" id="res-desde" style="font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);color:var(--text)">
         <label style="font-size:12px;color:var(--text2)">Hasta</label>
         <input type="date" id="res-hasta" style="font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);color:var(--text)">
-        <button class="btn btn-sm btn-primary" onclick="abrirResumenOficina('Gloria')">Gloria</button>
-        <button class="btn btn-sm btn-primary" onclick="abrirResumenOficina('Luis')">Luis</button>
-        <button class="btn btn-sm btn-primary" onclick="abrirResumenOficina('Edgardo')">Edgardo</button>
+        <button class="btn btn-sm btn-primary" id="res-btn" onclick="abrirResumenOficina(resumenListaActual())">Ver resumen</button>
       </div></div>
       <div class="search-wrap">
         <span class="search-icon">🔍</span>
@@ -1366,7 +1364,7 @@ function iniciarApp(){
 }
 function aplicarRol(){
   const esAdmin = rolActual==='admin';
-  document.querySelectorAll('.btn-resumen-oficina').forEach(function(el){ el.style.display = esAdmin ? '' : 'none'; });
+  actualizarBarraResumen();
   // Ocultar nav items que no corresponden al empleado
   const itemsAdmin = ['listas','caja','ganancia','ventas','config','actividad'];
   itemsAdmin.forEach(sec=>{
@@ -1938,8 +1936,20 @@ function setFiltroCliente(cod, el){
   el.classList.add('active');
   renderClientes();
 }
+function resumenListaActual(){ return ({G:'Gloria',L:'Luis',E:'Edgardo'})[filtroCodCliente]||''; }
+function actualizarBarraResumen(){
+  var b=document.getElementById('barra-resumen'); if(!b) return;
+  var lista=resumenListaActual();
+  var ver=(rolActual==='admin')&&!!lista;
+  b.style.display=ver?'':'none';
+  if(ver){
+    document.getElementById('res-titulo').textContent='📊 Resumen de consumo de '+lista;
+    document.getElementById('res-btn').textContent='Ver resumen de '+lista;
+  }
+}
 function renderClientes(){
   renderFiltrosListas();
+  actualizarBarraResumen();
   const q=(document.getElementById('search-clientes')?.value||'').toLowerCase();
   const lista=db.clientes.filter((c,i)=>{
     const matchTexto=!q||c.nombre.toLowerCase().includes(q)||(c.codigo||'').toLowerCase().includes(q)||(c.dir||'').toLowerCase().includes(q);
@@ -3080,6 +3090,7 @@ function cuentaTexto(neto,conSigno){
 }
 function fmtFechaAR(iso){ return iso?new Date(iso+'T12:00:00').toLocaleDateString('es-AR'):''; }
 function abrirResumenOficina(lista){
+  if(!lista) return;
   if(rolActual!=='admin'){ alert('Solo el administrador puede ver este resumen.'); return; }
   if(!document.getElementById('res-desde').value||!document.getElementById('res-hasta').value){ alert('Elegí las fechas Desde y Hasta para armar el resumen.'); return; }
   var r=calcularResumenOficina(lista); resumenOficinaDatos=r;

@@ -703,7 +703,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
               </table>
             </div>
             <div id="gan-aviso" style="display:none;background:var(--amber-light);border-radius:var(--radius);padding:10px 14px;font-size:13px;color:var(--amber);margin-top:8px">
-              ⚠️ Algunos productos no tienen precio de costo cargado. El cálculo puede estar incompleto.
+              ℹ️ Algunos productos no tienen costo cargado: se tomó como costo el mismo precio de venta, así que su ganancia es $0.
             </div>
           </div>
           <div id="gan-vacio" style="text-align:center;color:var(--text3);padding:2rem;font-size:13px">
@@ -4310,8 +4310,9 @@ function mostrarGanancia(idx){
   let costoTotal=0, ventaTotal=0, sinCosto=false;
   const filas=p.lineas.map(l=>{
     const prod=buscarProdDeLinea(l);
-    const costo=prod?.costo||0;
-    if(!costo) sinCosto=true;
+    const costoReal=prod?.costo||0;
+    if(!costoReal) sinCosto=true;
+    const costo=costoReal>0?costoReal:l.precio;
     const sv=l.cant*l.precio, sc=l.cant*costo, gan=sv-sc;
     const margen=sv>0?((gan/sv)*100).toFixed(1)+'%':'—';
     costoTotal+=sc; ventaTotal+=sv;
@@ -4320,9 +4321,9 @@ function mostrarGanancia(idx){
       <td><strong>\${l.nombre}</strong></td>
       <td style="text-align:center">\${l.cant}</td>
       <td>$\${fmt(l.precio)}</td>
-      <td>\${costo>0?'$'+fmt(costo):'<span style="color:var(--text3)">Sin costo</span>'}</td>
+      <td>\${costoReal>0?'$'+fmt(costo):'<span style="color:var(--text3)">Sin costo (= venta)</span>'}</td>
       <td>$\${fmt(sv)}</td>
-      <td>\${costo>0?'$'+fmt(sc):'<span style="color:var(--text3)">—</span>'}</td>
+      <td>\${costoReal>0?'$'+fmt(sc):'<span style="color:var(--text3)">$'+fmt(sc)+'</span>'}</td>
       <td style="font-weight:600;color:\${col}">$\${fmt(gan)}</td>
       <td style="font-size:12px;color:\${col}">\${margen}</td>
     </tr>\`;
@@ -4417,7 +4418,8 @@ function renderVentas(){
       var prod = buscarProdDeLinea(l);
       if(q && ((prod ? prod.nombre : '') + ' ' + (l.nombre || '')).toLowerCase().indexOf(q) === -1) return;
       cuenta = true;
-      var costoU = prod ? (prod.costo || 0) : 0;
+      var costoReal = prod ? (prod.costo || 0) : 0;
+      var costoU = costoReal > 0 ? costoReal : (l.precio || 0);
       var cant = l.cant || 0;
       var venta = cant * (l.precio || 0);
       var key = prod ? 'P|' + prod.codigo + '|' + prod.nombre : l.nombre;
@@ -4426,7 +4428,7 @@ function renderVentas(){
       f.uni += cant;
       f.venta += venta;
       f.costo += cant * costoU;
-      if(!costoU){ f.sinCosto = true; lineasSinCosto++; }
+      if(!(costoReal > 0)){ f.sinCosto = true; lineasSinCosto++; }
       totVenta += venta;
       totCosto += cant * costoU;
       totUni += cant;
@@ -4448,7 +4450,7 @@ function renderVentas(){
   var sinCosto = lista.filter(function(f){ return f.sinCosto; }).length;
   if(sinCosto){
     aviso.style.display = 'block';
-    aviso.textContent = '⚠️ ' + sinCosto + (sinCosto === 1 ? ' producto no tiene' : ' productos no tienen') + ' precio de costo cargado (o ya no existe en Productos). La ganancia de esos productos figura como si no hubiera costado nada, así que el total puede estar inflado.';
+    aviso.textContent = '⚠️ ' + sinCosto + (sinCosto === 1 ? ' producto no tiene' : ' productos no tienen') + ' precio de costo cargado (o ya no existe en Productos). Para esos productos se tomó como costo el mismo precio de venta, o sea que no suman ganancia (ganancia $0).';
   } else {
     aviso.style.display = 'none';
   }
@@ -4460,12 +4462,12 @@ function renderVentas(){
   var html = lista.map(function(f){
     var g = f.venta - f.costo;
     var col = g > 0 ? 'var(--green)' : (g < 0 ? 'var(--red)' : 'var(--text2)');
-    var m = (f.venta > 0 && !f.sinCosto) ? (g / f.venta * 100).toFixed(1) + '%' : '—';
+    var m = f.venta > 0 ? (g / f.venta * 100).toFixed(1) + '%' : '—';
     return '<tr>' +
       '<td><strong>' + f.nombre + '</strong></td>' +
       '<td>' + f.uni.toLocaleString('es-AR') + ' <span style="font-size:11px;color:var(--text3)">' + f.unidad + '</span></td>' +
       '<td>$' + fmt(f.venta) + '</td>' +
-      '<td>' + (f.sinCosto ? '<span style="color:var(--text3)">Sin costo</span>' : '$' + fmt(f.costo)) + '</td>' +
+      '<td>' + ('$' + fmt(f.costo) + (f.sinCosto ? ' <span style="font-size:11px;color:var(--text3)">(sin costo = venta)</span>' : '')) + '</td>' +
       '<td style="font-weight:600;color:' + col + '">$' + fmt(g) + '</td>' +
       '<td style="font-size:12px;color:' + col + '">' + m + '</td>' +
     '</tr>';

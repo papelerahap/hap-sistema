@@ -3452,10 +3452,9 @@ function renderEntrega(){
       '<td><strong>'+(p.cliente?p.cliente.nombre:'Consumidor final')+'</strong></td>'+
       '<td><strong>$'+fmt(p.total)+'</strong></td>'+
       '<td>'+imp+'</td>'+
-      '<td style="white-space:nowrap"><button class="btn btn-sm btn-green" onclick="entregarPagado('+i+')">✅ Entregado y pagado</button> '+
+      '<td style="white-space:nowrap">'+
       '<button class="btn btn-sm btn-primary" onclick="abrirEntrega('+i+')" title="Cargás cuánto pagó; si falta, pasa a Deudores; si pagó de más, queda a favor">📦 Entregado (cargar pago)</button> '+
-      '<button class="btn btn-sm" onclick="abrirModalPago('+i+')">💲 Pago</button> '+
-      '<button class="btn btn-sm" onclick="imprimirPresupuesto('+i+')">🖨️</button></td></tr>';
+      '</td></tr>';
   }).join('');
 }
 function entregarPagado(idx){

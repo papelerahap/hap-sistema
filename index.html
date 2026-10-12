@@ -914,6 +914,28 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
     </div>
   </div>
 </div>
+<!-- MODAL COBRO TOTAL -->
+<div class="modal-backdrop" id="modal-cobro">
+  <div class="modal" style="max-width:420px">
+    <h3>Cobrar boleta completa</h3>
+    <div id="cobro-info" style="font-size:13px;color:var(--text2);margin-bottom:12px"></div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label>¿Cómo pagó?</label>
+      <select id="cobro-forma" onchange="cobroFormaCambio()">
+        <option>Efectivo</option><option>Transferencia</option><option>Efectivo + Transferencia</option>
+        <option>Tarjeta débito</option><option>Tarjeta crédito</option>
+      </select>
+    </div>
+    <div class="form-group" id="cobro-mixto" style="display:none;margin-bottom:12px">
+      <label>Parte en efectivo ($) — el resto va como transferencia</label>
+      <input type="number" id="cobro-efvo" step="0.01" placeholder="0.00">
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="cerrarModales()">Cancelar</button>
+      <button class="btn btn-green" onclick="confirmarCobroTotal()">✅ Cobrar</button>
+    </div>
+  </div>
+</div>
 <!-- MODAL RESUMEN OFICINA -->
 <div class="modal-backdrop" id="modal-resumen">
   <div class="modal" style="max-width:720px;width:95%">
@@ -3439,9 +3461,10 @@ function renderEntrega(){
 function entregarPagado(idx){
   var p=db.presupuestos[idx]; if(!p) return;
   if(saldoPendienteBoleta(p)>0.01){
-    cobrarPresupuesto(idx);
-    if(p.estado!=='Aprobado') return;
-  } else p.estado='Aprobado';
+    cobrarPresupuesto(idx, function(){ marcarEntregado(idx); });
+    return;
+  }
+  p.estado='Aprobado';
   marcarEntregado(idx);
 }
 function marcarEntregado(idx){
@@ -3613,21 +3636,44 @@ function confirmarPago(){
   guardar(); cerrarModales(); renderDeudores(); renderAfavor(); renderDashboard(); renderPresupuestos(); try{ renderEntrega(); }catch(e){}
 }
 
-function cobrarPresupuesto(idx){
-  if(!confirm('¿Marcar la boleta entera como cobrada?'))return;
-  const p=db.presupuestos[idx];
-  const saldo=saldoDeuda(p);
+var cobroIdx=null, cobroCb=null;
+function cobrarPresupuesto(idx, cb){
+  var p=db.presupuestos[idx]; if(!p) return;
+  cobroIdx=idx; cobroCb=cb||null;
+  var saldo=saldoDeuda(p);
+  document.getElementById('cobro-info').textContent='Boleta #'+p.numero+' — '+(p.cliente?p.cliente.nombre:'Consumidor final')+' — Saldo a cobrar: $'+fmt(saldo);
+  document.getElementById('cobro-forma').value='Efectivo';
+  document.getElementById('cobro-efvo').value='';
+  cobroFormaCambio();
+  document.getElementById('modal-cobro').classList.add('open');
+}
+function cobroFormaCambio(){
+  document.getElementById('cobro-mixto').style.display=(document.getElementById('cobro-forma').value==='Efectivo + Transferencia')?'block':'none';
+}
+function confirmarCobroTotal(){
+  var idx=cobroIdx; var p=db.presupuestos[idx]; if(!p) return;
+  var saldo=saldoDeuda(p);
+  var forma=document.getElementById('cobro-forma').value;
+  var partes=[];
+  if(forma==='Efectivo + Transferencia'){
+    var ef=parseFloat(document.getElementById('cobro-efvo').value)||0;
+    if(ef<=0||ef>=saldo){ alert('Escribí cuánto pagó en efectivo (menos que el total). El resto se toma como transferencia.'); return; }
+    partes=[{forma:'Efectivo',monto:ef},{forma:'Transferencia',monto:Math.round((saldo-ef)*100)/100}];
+  } else if(saldo>0){
+    partes=[{forma:forma,monto:saldo}];
+  }
   if(!p.pagos)p.pagos=[];
   if(!db.caja)db.caja=[];
-  if(saldo>0){
-    const forma='Efectivo';
-    p.pagos.push({fecha:new Date().toLocaleDateString('es-AR'),monto:saldo,forma,nota:'Pago total'});
-    db.caja.push({fecha:new Date().toLocaleDateString('es-AR'),tipo:'entrada',medio:forma,
-      desc:`Cobro total boleta #${p.numero}${p.cliente?' — '+p.cliente.nombre:''}`, monto:saldo});
-  }
+  var hoy=new Date().toLocaleDateString('es-AR');
+  partes.forEach(function(x){
+    p.pagos.push({fecha:hoy,monto:x.monto,forma:x.forma,nota:'Pago total'});
+    db.caja.push({fecha:hoy,tipo:'entrada',medio:x.forma,desc:'Cobro total boleta #'+p.numero+(p.cliente?' — '+p.cliente.nombre:''),monto:x.monto});
+  });
   p.estado='Aprobado';
-  registrarActividad('pago',`Marcó cobro total boleta #${p.numero}`,`Cliente: ${p.cliente?.nombre||'Consumidor final'} | Total: $${fmt(p.total)}`);
-  guardar(); renderDeudores(); renderAfavor(); renderDashboard(); renderPresupuestos();
+  registrarActividad('pago','Marcó cobro total boleta #'+p.numero,'Cliente: '+(p.cliente?p.cliente.nombre:'Consumidor final')+' | Total: $'+fmt(p.total)+' | Forma: '+(partes.map(function(x){return x.forma+' $'+fmt(x.monto);}).join(' + ')||'—'));
+  var cb=cobroCb; cobroCb=null;
+  guardar(); cerrarModales(); renderDeudores(); renderAfavor(); renderDashboard(); renderPresupuestos(); try{ renderEntrega(); }catch(e){}
+  if(cb) cb();
 }
 
 // ---- EXPORTAR / IMPORTAR ----

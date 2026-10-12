@@ -2258,7 +2258,7 @@ function guardarEdicionPresupuesto(lineas, subtotal, cliente, deuda){
   editPresIdx = null;
   presClienteSnapshot = null;
   cerrarModales();
-  renderPresupuestos(); renderDashboard(); renderDeudores(); renderAfavor(); if(typeof renderProductos === 'function') renderProductos(); avisoStock(rStockE);
+  renderPresupuestos(); renderDashboard(); renderDeudores(); renderAfavor(); try{ renderEntrega(); }catch(e){} if(typeof renderProductos === 'function') renderProductos(); avisoStock(rStockE);
   guardar().then(function(){
     if(!ultimoGuardadoOk) alert('Los cambios de la boleta quedaron SOLO en esta computadora: no se pudieron guardar en el servidor. Si refrescás la página se pierden. Esperá unos segundos y volvé a guardar.');
   });
@@ -3197,7 +3197,7 @@ function renderPresupuestos(){
     var qEl=document.getElementById('pres-buscar');
     var verCob=document.getElementById('pres-ver-cobradas');
     var hayBusqueda=!!(qEl&&qEl.value.trim());
-    if(p.estado==='Aprobado'&&!hayBusqueda&&!(verCob&&verCob.checked)) return false;
+    if((p.estado==='Aprobado'||p.impreso)&&!hayBusqueda&&!(verCob&&verCob.checked)) return false;
     var q=qEl?qEl.value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''):'';
     if(q){
       var txt=((p.cliente?p.cliente.nombre:'Consumidor final')+' '+p.numero+' '+(p.cliente&&p.cliente.codigo?p.cliente.codigo:'')+' '+(p.lineas||[]).map(function(l){return l.nombre;}).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
@@ -3205,9 +3205,9 @@ function renderPresupuestos(){
     }
     return true;
   });
-  var nCob=db.presupuestos.filter(function(p){ return p.estado==='Aprobado'; }).length;
+  var nCob=db.presupuestos.filter(function(p){ return p.estado==='Aprobado'||p.impreso; }).length;
   var verC=document.getElementById('pres-ver-cobradas');
-  document.getElementById('pres-count').textContent=lista.length+' presupuesto'+(lista.length!==1?'s':'')+((verC&&verC.checked)||!nCob?'':' · '+nCob+' cobrada'+(nCob!==1?'s':'')+' guardada'+(nCob!==1?'s':'')+' en el historial');
+  document.getElementById('pres-count').textContent=lista.length+' presupuesto'+(lista.length!==1?'s':'')+((verC&&verC.checked)||!nCob?'':' · '+nCob+' cobrada'+(nCob!==1?'s':'')+' o enviada'+(nCob!==1?'s':'')+' a entrega/deudores (ocultas, se ven con la casilla o buscando)');
   const t=document.getElementById('tabla-presupuestos');
   if(!lista.length){t.innerHTML='<tr class="empty-row"><td colspan="7">Sin presupuestos en este filtro</td></tr>';return;}
   t.innerHTML=lista.map(p=>{
@@ -3253,7 +3253,7 @@ function imprimirPresupuesto(idx){
   if(!p.impreso){
     p.impreso=true; p.fecha_impresion=new Date().toISOString();
     try{ guardar(); }catch(e){}
-    try{ if(document.getElementById('entrega').classList.contains('active')) renderEntrega(); }catch(e){}
+    try{ renderEntrega(); renderPresupuestos(); }catch(e){}
   }
   const empresa=cfg.nombre||'Distribuidora HAP';
   const numStr=String(p.numero).padStart(6,'0');
@@ -3453,6 +3453,7 @@ function renderEntrega(){
       '<td><strong>$'+fmt(p.total)+'</strong></td>'+
       '<td>'+imp+'</td>'+
       '<td style="white-space:nowrap">'+
+      (rolActual==='admin'?'<button class="btn btn-sm" onclick="editarPresupuesto('+i+')" title="Editar boleta">✏️</button> ':'')+
       '<button class="btn btn-sm btn-primary" onclick="abrirEntrega('+i+')" title="Cargás cuánto pagó; si falta, pasa a Deudores; si pagó de más, queda a favor">📦 Entregado (cargar pago)</button> '+
       '</td></tr>';
   }).join('');
@@ -3537,7 +3538,7 @@ function renderDeudores(){
       <td style="white-space:nowrap;display:flex;gap:4px;align-items:center">
         <button class="btn btn-sm btn-primary" onclick="abrirModalPago(${realIdx})">💲 Pago</button>
         <button class="btn btn-sm btn-green" onclick="cobrarPresupuesto(${realIdx})">✅ Total</button>
-        <button class="btn btn-sm" onclick="editarPresupuesto(${realIdx})" title="Editar boleta">✏️</button>
+        ${rolActual==='admin'?`<button class="btn btn-sm" onclick="editarPresupuesto(${realIdx})" title="Editar boleta">✏️</button>`:''}
         <button class="btn btn-sm" onclick="imprimirPresupuesto(${realIdx})">🖨️</button>
       </td>
     </tr>`;

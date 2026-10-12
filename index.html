@@ -396,6 +396,16 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
         <button class="filtro-btn filtro-n" onclick="setFiltroCliente('SIN',this)">Sin asignar</button>
         <span id="clientes-count" style="font-size:12px;color:var(--text3);margin-left:4px"></span>
       </div>
+      <div class="btn-resumen-oficina" style="margin-bottom:12px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px">
+        <span style="font-size:12px;font-weight:600;color:var(--text2)">📊 Resumen de consumo</span>
+        <label style="font-size:12px;color:var(--text2)">Desde</label>
+        <input type="date" id="res-desde" style="font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);color:var(--text)">
+        <label style="font-size:12px;color:var(--text2)">Hasta</label>
+        <input type="date" id="res-hasta" style="font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);color:var(--text)">
+        <button class="btn btn-sm btn-primary" onclick="abrirResumenOficina('Gloria')">Gloria</button>
+        <button class="btn btn-sm btn-primary" onclick="abrirResumenOficina('Luis')">Luis</button>
+        <button class="btn btn-sm btn-primary" onclick="abrirResumenOficina('Edgardo')">Edgardo</button>
+      </div></div>
       <div class="search-wrap">
         <span class="search-icon">🔍</span>
         <input type="text" id="search-clientes" placeholder="Buscar cliente..." oninput="renderClientes()">
@@ -428,8 +438,6 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
         <label style="font-size:12px;color:var(--text2);font-weight:500">Hasta</label>
         <input type="date" id="pres-hasta" onchange="renderPresupuestos()" style="font-size:13px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);color:var(--text)">
         <button class="btn btn-sm" onclick="limpiarFechasPres()">✕ Limpiar fechas</button>
-        <button class="btn btn-sm btn-primary btn-resumen-oficina" onclick="abrirResumenOficina('Gloria')">📊 Resumen Gloria</button>
-        <button class="btn btn-sm btn-primary btn-resumen-oficina" onclick="abrirResumenOficina('Luis')">📊 Resumen Luis</button>
       </div>
       <div class="card">
         <table><thead><tr><th>N°</th><th>Fecha</th><th>Cliente</th><th>Deuda ant.</th><th>Total</th><th>Estado</th><th></th></tr></thead>
@@ -3072,8 +3080,8 @@ let filtroPresupuesto='';
 function fechaISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 var resumenOficinaDatos=null;
 function calcularResumenOficina(lista){
-  var desde=document.getElementById('pres-desde').value, hasta=document.getElementById('pres-hasta').value;
-  var cod0=(lista==='Luis')?'L':'G';
+  var desde=document.getElementById('res-desde').value, hasta=document.getElementById('res-hasta').value;
+  var cod0=({Gloria:'G',Luis:'L',Edgardo:'E'})[lista]||'G';
   var g={lista:lista,filas:[],total:0,boletas:0};
   var porNombre={};
   db.clientes.forEach(function(c){
@@ -3105,7 +3113,7 @@ function cuentaTexto(neto,conSigno){
 function fmtFechaAR(iso){ return iso?new Date(iso+'T12:00:00').toLocaleDateString('es-AR'):''; }
 function abrirResumenOficina(lista){
   if(rolActual!=='admin'){ alert('Solo el administrador puede ver este resumen.'); return; }
-  if(!document.getElementById('pres-desde').value||!document.getElementById('pres-hasta').value){ alert('Elegí las fechas Desde y Hasta para armar el resumen.'); return; }
+  if(!document.getElementById('res-desde').value||!document.getElementById('res-hasta').value){ alert('Elegí las fechas Desde y Hasta para armar el resumen.'); return; }
   var r=calcularResumenOficina(lista); resumenOficinaDatos=r;
   document.getElementById('resumen-titulo').textContent='Resumen de consumo — '+lista;
   document.getElementById('resumen-periodo').textContent='Período: '+fmtFechaAR(r.desde)+' al '+fmtFechaAR(r.hasta)+' · Sin la deuda anterior de cada boleta';

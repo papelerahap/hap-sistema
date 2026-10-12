@@ -872,7 +872,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
 <!-- MODAL PAGO PARCIAL -->
 <div class="modal-backdrop" id="modal-pago">
   <div class="modal">
-    <h3>Registrar pago</h3>
+    <h3 id="pago-titulo">Registrar pago</h3>
     <div style="background:var(--bg);border-radius:var(--radius);padding:12px;margin-bottom:1rem;font-size:13px">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px">
         <span style="color:var(--text2)">Cliente:</span><strong id="pago-cliente-nombre">—</strong>
@@ -917,7 +917,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="cerrarModales()">Cancelar</button>
-      <button class="btn btn-primary" onclick="confirmarPago()">Registrar pago</button>
+      <button class="btn btn-primary" id="pago-btn-ok" onclick="confirmarPago()">Registrar pago</button>
     </div>
   </div>
 </div>
@@ -3298,7 +3298,7 @@ function renderEntrega(){
       '<td><strong>$'+fmt(p.total)+'</strong></td>'+
       '<td>'+imp+'</td>'+
       '<td style="white-space:nowrap"><button class="btn btn-sm btn-green" onclick="entregarPagado('+i+')">✅ Entregado y pagado</button> '+
-      '<button class="btn btn-sm btn-primary" onclick="marcarEntregado('+i+')" title="Pasa a Deudores con lo que falte cobrar">📦 Entregado, queda deuda</button> '+
+      '<button class="btn btn-sm btn-primary" onclick="abrirEntrega('+i+')" title="Cargás cuánto pagó; si falta, pasa a Deudores; si pagó de más, queda a favor">📦 Entregado (cargar pago)</button> '+
       '<button class="btn btn-sm" onclick="abrirModalPago('+i+')">💲 Pago</button> '+
       '<button class="btn btn-sm" onclick="imprimirPresupuesto('+i+')">🖨️</button></td></tr>';
   }).join('');
@@ -3390,8 +3390,19 @@ function renderDeudores(){
 }
 
 let pagoIdx=null;
+let pagoEntrega=false;
+function abrirEntrega(idx){
+  abrirModalPago(idx);
+  pagoEntrega=true;
+  document.getElementById('pago-titulo').textContent='Entregar boleta — ¿cuánto pagó?';
+  document.getElementById('pago-btn-ok').textContent='Entregar';
+  document.getElementById('pago-monto').placeholder='Vacío = no pagó nada';
+}
 function abrirModalPago(idx){
-  pagoIdx=idx;
+  pagoIdx=idx; pagoEntrega=false;
+  document.getElementById('pago-titulo').textContent='Registrar pago';
+  document.getElementById('pago-btn-ok').textContent='Registrar pago';
+  document.getElementById('pago-monto').placeholder='0.00'; document.getElementById('pago-nota').placeholder='Ej: abono parcial, seña...';
   const p=db.presupuestos[idx];
   const pagado=(p.pagos||[]).reduce((s,pg)=>s+pg.monto,0);
   const saldo=saldoPendienteBoleta(p);
@@ -3445,6 +3456,7 @@ function actualizarNuevoSaldo(){
 
 function confirmarPago(){
   const monto=parseFloat(document.getElementById('pago-monto').value)||0;
+  if(pagoEntrega&&!monto){ pagoEntrega=false; cerrarModales(); marcarEntregado(pagoIdx); return; }
   if(!monto||monto<=0){alert('Ingresá un monto mayor a cero');return;}
   const p=db.presupuestos[pagoIdx];
   const saldo=saldoDeuda(p);
@@ -3464,6 +3476,7 @@ function confirmarPago(){
     desc: \`Cobro boleta #\${p.numero}\${p.cliente?' — '+p.cliente.nombre:''}\${nota?' ('+nota+')':''}\`,
     monto
   });
+  if(pagoEntrega){ pagoEntrega=false; p.entregado=true; p.fecha_entrega=new Date().toISOString(); registrarActividad('presupuesto','Entregó boleta #'+p.numero,'Cliente: '+(p.cliente?p.cliente.nombre:'Consumidor final')); }
   guardar(); cerrarModales(); renderDeudores(); renderAfavor(); renderDashboard(); renderPresupuestos(); try{ renderEntrega(); }catch(e){}
 }
 

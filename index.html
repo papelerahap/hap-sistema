@@ -428,6 +428,9 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
         <label style="font-size:12px;color:var(--text2);font-weight:500">Hasta</label>
         <input type="date" id="pres-hasta" onchange="renderPresupuestos()" style="font-size:13px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);color:var(--text)">
         <button class="btn btn-sm" onclick="limpiarFechasPres()">✕ Limpiar fechas</button>
+        <button class="btn btn-sm" onclick="fechasPresSemana(0)">📅 Esta semana</button>
+        <button class="btn btn-sm" onclick="fechasPresSemana(-1)">📅 Semana pasada</button>
+        <button class="btn btn-sm btn-primary" onclick="abrirResumenOficina()">📊 Resumen Luis y Gloria</button>
       </div>
       <div class="card">
         <table><thead><tr><th>N°</th><th>Fecha</th><th>Cliente</th><th>Deuda ant.</th><th>Total</th><th>Estado</th><th></th></tr></thead>
@@ -903,6 +906,18 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
     <div class="modal-footer">
       <button class="btn" onclick="cerrarModales()">Cancelar</button>
       <button class="btn btn-primary" id="pago-btn-ok" onclick="confirmarPago()">Registrar pago</button>
+    </div>
+  </div>
+</div>
+<!-- MODAL RESUMEN OFICINA -->
+<div class="modal-backdrop" id="modal-resumen">
+  <div class="modal" style="max-width:720px;width:95%">
+    <h3>Resumen de consumo — Luis y Gloria</h3>
+    <div id="resumen-periodo" style="font-size:13px;color:var(--text2);margin-bottom:10px"></div>
+    <div style="max-height:55vh;overflow:auto;margin-bottom:12px"><table style="width:100%"><thead><tr><th>Lista</th><th>Cliente</th><th style="text-align:right">Boletas</th><th style="text-align:right">Consumo</th></tr></thead><tbody id="resumen-tabla"></tbody></table></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="cerrarModales()">Cerrar</button>
+      <button class="btn btn-green" onclick="descargarResumenOficina()">⬇️ Descargar Excel</button>
     </div>
   </div>
 </div>
@@ -3054,6 +3069,79 @@ function limpiarFechasPres(){
   renderPresupuestos();
 }
 let filtroPresupuesto='';
+function fechaISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function fechasPresSemana(offset){
+  var hoy=new Date(); var dow=(hoy.getDay()+6)%7; // lunes=0
+  var lun=new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()-dow+7*(offset||0));
+  var dom=new Date(lun.getFullYear(),lun.getMonth(),lun.getDate()+6);
+  document.getElementById('pres-desde').value=fechaISO(lun);
+  document.getElementById('pres-hasta').value=fechaISO(dom);
+  renderPresupuestos();
+}
+var resumenOficinaDatos=null;
+function calcularResumenOficina(){
+  var desde=document.getElementById('pres-desde').value, hasta=document.getElementById('pres-hasta').value;
+  var grupos=[{lista:'Gloria',cod:'G',filas:[],total:0,boletas:0},{lista:'Luis',cod:'L',filas:[],total:0,boletas:0}];
+  var porNombre={};
+  db.clientes.forEach(function(c){
+    var cod=(c.codigo||'').toUpperCase();
+    var g=grupos.filter(function(x){ return cod===x.cod || (!cod && c.lista_precio===x.lista); })[0];
+    if(!g) return;
+    var fila={nombre:c.nombre,boletas:0,total:0};
+    g.filas.push(fila); porNombre[c.nombre]=fila;
+  });
+  db.presupuestos.forEach(function(p){
+    if(!p.cliente||p.estado==='Rechazado'||p.estado==='Vencido') return;
+    if(desde&&(!p.fecha||p.fecha<desde)) return;
+    if(hasta&&(!p.fecha||p.fecha>hasta)) return;
+    var fila=porNombre[p.cliente.nombre]; if(!fila) return;
+    var consumo=(typeof p.subtotal==='number')?p.subtotal:((p.total||0)-(p.deuda||0));
+    fila.boletas++; fila.total+=consumo;
+  });
+  var totalGeneral=0, boletasGeneral=0;
+  grupos.forEach(function(g){
+    g.filas.sort(function(a,b){ return a.nombre.localeCompare(b.nombre,'es'); });
+    g.filas.forEach(function(x){ g.total+=x.total; g.boletas+=x.boletas; });
+    totalGeneral+=g.total; boletasGeneral+=g.boletas;
+  });
+  return {desde:desde,hasta:hasta,grupos:grupos,total:totalGeneral,boletas:boletasGeneral};
+}
+function fmtFechaAR(iso){ return iso?new Date(iso+'T12:00:00').toLocaleDateString('es-AR'):''; }
+function abrirResumenOficina(){
+  if(!document.getElementById('pres-desde').value&&!document.getElementById('pres-hasta').value) fechasPresSemana(0);
+  var r=calcularResumenOficina(); resumenOficinaDatos=r;
+  document.getElementById('resumen-periodo').textContent='Período: '+(fmtFechaAR(r.desde)||'inicio')+' al '+(fmtFechaAR(r.hasta)||'hoy')+' · Total sin deuda anterior';
+  var h='';
+  r.grupos.forEach(function(g){
+    g.filas.forEach(function(x){
+      h+='<tr><td>'+g.lista+'</td><td>'+x.nombre+'</td><td style="text-align:right">'+x.boletas+'</td><td style="text-align:right">$'+fmt(x.total)+'</td></tr>';
+    });
+    h+='<tr style="background:var(--bg);font-weight:700"><td colspan="2">Subtotal '+g.lista+' ('+g.filas.length+' clientes)</td><td style="text-align:right">'+g.boletas+'</td><td style="text-align:right">$'+fmt(g.total)+'</td></tr>';
+  });
+  h+='<tr style="background:var(--bg);font-weight:700;font-size:15px"><td colspan="2">TOTAL GENERAL</td><td style="text-align:right">'+r.boletas+'</td><td style="text-align:right">$'+fmt(r.total)+'</td></tr>';
+  document.getElementById('resumen-tabla').innerHTML=h;
+  document.getElementById('modal-resumen').classList.add('open');
+}
+function descargarResumenOficina(){
+  var r=resumenOficinaDatos||calcularResumenOficina();
+  var NL=String.fromCharCode(13,10), Q=String.fromCharCode(34);
+  function cel(v){ return Q+String(v).split(Q).join(Q+Q)+Q; }
+  function num(n){ return (Math.round(n*100)/100).toFixed(2).replace('.',','); }
+  var out=[];
+  out.push([cel('Resumen de consumo Luis y Gloria'),cel('Del '+(fmtFechaAR(r.desde)||'inicio')+' al '+(fmtFechaAR(r.hasta)||'hoy')),'',''].join(';'));
+  out.push([cel('Lista'),cel('Cliente'),cel('Boletas'),cel('Consumo')].join(';'));
+  r.grupos.forEach(function(g){
+    g.filas.forEach(function(x){ out.push([cel(g.lista),cel(x.nombre),x.boletas,num(x.total)].join(';')); });
+    out.push([cel('Subtotal '+g.lista),'',g.boletas,num(g.total)].join(';'));
+  });
+  out.push([cel('TOTAL GENERAL'),'',r.boletas,num(r.total)].join(';'));
+  var blob=new Blob([String.fromCharCode(0xFEFF)+out.join(NL)],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='consumo-luis-gloria-'+(r.desde||'inicio')+'-a-'+(r.hasta||'hoy')+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); },1000);
+}
 function setFiltroPres(cod,el){
   filtroPresupuesto=cod;
   document.querySelectorAll('#presupuestos .filtro-btn').forEach(b=>b.classList.remove('active'));

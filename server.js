@@ -433,7 +433,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
     <div id="presupuestos" class="section">
       <div class="section-header">
         <h2>Presupuestos</h2>
-        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="btn-desc-stock" onclick="descontarStockAnteriores()">📦 Descontar stock de boletas anteriores</button><button class="btn btn-primary" onclick="abrirModalPresupuesto()">+ Nuevo presupuesto</button></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="btn-desc-stock" onclick="descontarStockAnteriores()">📦 Descontar stock de boletas anteriores</button><button class="btn" id="btn-masiva" style="display:none" onclick="abrirMasiva()">📦 Marcar entregadas</button><button class="btn btn-primary" onclick="abrirModalPresupuesto()">+ Nuevo presupuesto</button></div>
       </div>
       <div style="margin-bottom:10px"><input type="search" id="pres-buscar" placeholder="🔍 Buscar por cliente, número de boleta o producto..." oninput="renderPresupuestos()" style="width:100%;max-width:420px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px"> <label style="font-size:12px;color:var(--text2);margin-left:10px;white-space:nowrap"><input type="checkbox" id="pres-ver-cobradas" onchange="renderPresupuestos()"> Mostrar cobradas</label></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
@@ -929,6 +929,24 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
     </div>
   </div>
 </div>
+<!-- MODAL MARCAR ENTREGADAS -->
+<div class="modal-backdrop" id="modal-masiva">
+  <div class="modal" style="max-width:760px;width:95%">
+    <h3>Marcar boletas como entregadas</h3>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Tildá las boletas que ya se entregaron. Salen de Presupuestos: las que tienen deuda pasan a Deudores y las que tienen a favor quedan en A favor.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <input type="search" id="masiva-buscar" placeholder="🔍 Filtrar por cliente o número..." oninput="renderMasiva()" style="flex:1;min-width:200px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px">
+      <button class="btn btn-sm" onclick="masivaTildarVisibles(true)">Tildar las que se ven</button>
+      <button class="btn btn-sm" onclick="masivaTildarVisibles(false)">Destildar</button>
+      <span id="masiva-n" style="font-size:12px;color:var(--text3)"></span>
+    </div>
+    <div style="max-height:50vh;overflow:auto;margin-bottom:12px"><table style="width:100%"><thead><tr><th></th><th>N°</th><th>Fecha</th><th>Cliente</th><th style="text-align:right">Total</th><th>Cuenta</th></tr></thead><tbody id="masiva-tabla"></tbody></table></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="cerrarModales()">Cancelar</button>
+      <button class="btn btn-green" onclick="aplicarMasiva()">✅ Marcar como entregadas</button>
+    </div>
+  </div>
+</div>
 <!-- MODAL COBRO TOTAL -->
 <div class="modal-backdrop" id="modal-cobro">
   <div class="modal" style="max-width:420px">
@@ -1387,6 +1405,7 @@ function iniciarApp(){
 function aplicarRol(){
   const esAdmin = rolActual==='admin';
   actualizarBarraResumen();
+  var bm=document.getElementById('btn-masiva'); if(bm) bm.style.display=esAdmin?'':'none';
   // Ocultar nav items que no corresponden al empleado
   const itemsAdmin = ['listas','caja','ganancia','ventas','config','actividad'];
   itemsAdmin.forEach(sec=>{
@@ -3395,6 +3414,64 @@ async function guardarConfig(){
   if(nuevaPass) document.getElementById('cfg-pass').value='';
   await guardar(); 
   const ok=document.getElementById('cfg-ok'); ok.style.display='inline'; setTimeout(()=>ok.style.display='none',2500);
+}
+
+// ---- MARCAR VARIAS BOLETAS COMO ENTREGADAS (solo admin y Tute) ----
+function masivaBoletas(){
+  var q=(document.getElementById('masiva-buscar').value||'').toLowerCase().trim();
+  return db.presupuestos.map(function(p,i){ return {p:p,i:i}; }).filter(function(x){
+    if(x.p.impreso||x.p.estado!=='Pendiente') return false;
+    if(!q) return true;
+    var t=((x.p.cliente?x.p.cliente.nombre:'Consumidor final')+' '+x.p.numero).toLowerCase();
+    return q.split(' ').every(function(w){ return t.indexOf(w)>-1; });
+  }).sort(function(a,b){
+    var na=(a.p.cliente?a.p.cliente.nombre:'').toLowerCase(), nb=(b.p.cliente?b.p.cliente.nombre:'').toLowerCase();
+    return na<nb?-1:na>nb?1:b.p.numero-a.p.numero;
+  });
+}
+function abrirMasiva(){
+  if(rolActual!=='admin'){ alert('Solo el administrador puede usar esto.'); return; }
+  document.getElementById('masiva-buscar').value='';
+  renderMasiva();
+  document.getElementById('modal-masiva').classList.add('open');
+}
+function renderMasiva(){
+  var prev={};
+  document.querySelectorAll('#masiva-tabla .masiva-chk').forEach(function(c){ if(c.checked) prev[c.getAttribute('data-i')]=true; });
+  var l=masivaBoletas(), h='';
+  l.forEach(function(x){
+    var p=x.p, pag=(p.pagos||[]).reduce(function(a,g){return a+g.monto;},0), sal=saldoPendienteBoleta(p);
+    var est=sal<-0.01?'A favor $'+fmt(-sal):(sal<=0.01?'Pagada':(pag>0?'Pagó $'+fmt(pag)+' · debe $'+fmt(sal):'Debe $'+fmt(sal)));
+    h+='<tr><td><input type="checkbox" class="masiva-chk" data-i="'+x.i+'"'+(prev[x.i]?' checked':'')+' onchange="contarMasiva()"></td><td>'+p.numero+'</td><td>'+(p.fecha?new Date(p.fecha+'T12:00:00').toLocaleDateString('es-AR'):'')+'</td><td><strong>'+(p.cliente?p.cliente.nombre:'Consumidor final')+'</strong></td><td style="text-align:right">$'+fmt(p.total)+'</td><td style="font-size:12px">'+est+'</td></tr>';
+  });
+  document.getElementById('masiva-tabla').innerHTML=h||'<tr class="empty-row"><td colspan="6">No hay boletas para marcar</td></tr>';
+  contarMasiva();
+}
+function masivaTildarVisibles(v){
+  document.querySelectorAll('#masiva-tabla .masiva-chk').forEach(function(c){ c.checked=v; });
+  contarMasiva();
+}
+function contarMasiva(){
+  var n=document.querySelectorAll('#masiva-tabla .masiva-chk:checked').length;
+  document.getElementById('masiva-n').textContent=n+' tildada'+(n!==1?'s':'');
+}
+function aplicarMasiva(){
+  if(rolActual!=='admin') return;
+  var idx=[];
+  document.querySelectorAll('#masiva-tabla .masiva-chk:checked').forEach(function(c){ idx.push(parseInt(c.getAttribute('data-i'),10)); });
+  if(!idx.length){ alert('Tildá al menos una boleta'); return; }
+  if(!confirm('Marcar '+idx.length+' boleta(s) como entregadas? Dejan de aparecer en Presupuestos: las que deben van a Deudores y las que tienen a favor quedan en A favor.')) return;
+  var ahora=new Date().toISOString(), nums=[];
+  idx.forEach(function(i){
+    var p=db.presupuestos[i]; if(!p) return;
+    if(!p.impreso){ p.impreso=true; p.fecha_impresion=ahora; }
+    p.entregado=true; p.fecha_entrega=ahora;
+    if(saldoPendienteBoleta(p)<=0.01) p.estado='Aprobado';
+    nums.push(p.numero);
+  });
+  registrarActividad('presupuesto','Marcó '+nums.length+' boletas como entregadas','Boletas: '+nums.join(', '));
+  guardar(); cerrarModales();
+  renderPresupuestos(); renderDeudores(); renderAfavor(); renderEntrega(); renderDashboard();
 }
 
 // ---- PENDIENTE DE ENTREGA ----

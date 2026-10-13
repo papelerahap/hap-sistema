@@ -272,6 +272,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
       <div class="nav-item" onclick="showSection('caja',this)">💰 Caja</div>
       <div class="nav-item" onclick="showSection('ganancia',this)">📈 Ganancia</div>
       <div class="nav-item" onclick="showSection('ventas',this)">📊 Ventas</div>
+      <div class="nav-item" onclick="showSection('contabilidad',this)">🧮 Contabilidad</div>
     </div>
     <div class="nav-section">
       <div class="nav-label">Mi empresa</div>
@@ -719,6 +720,41 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- CONTABILIDAD -->
+    <div id="contabilidad" class="section">
+      <div class="section-header">
+        <h2>Contabilidad y balance 🧮</h2>
+        <button class="btn btn-green" onclick="descargarContabilidad()">⬇️ Descargar resumen (Excel)</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+        <label style="font-size:12px;color:var(--text2);font-weight:500">Desde</label>
+        <input type="date" id="ctb-desde" onchange="renderContabilidad()" style="font-size:13px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);color:var(--text)">
+        <label style="font-size:12px;color:var(--text2);font-weight:500">Hasta</label>
+        <input type="date" id="ctb-hasta" onchange="renderContabilidad()" style="font-size:13px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);color:var(--text)">
+        <button class="btn btn-sm" onclick="ctbPeriodo('mes')">Este mes</button>
+        <button class="btn btn-sm" onclick="ctbPeriodo('mesant')">Mes pasado</button>
+        <button class="btn btn-sm" onclick="ctbPeriodo('anio')">Este año</button>
+        <button class="btn btn-sm" onclick="ctbPeriodo('todo')">Todo</button>
+      </div>
+      <div id="ctb-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:1.25rem"></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px">
+        <div class="card"><div class="card-body" id="ctb-resultados"></div></div>
+        <div class="card"><div class="card-body" id="ctb-balance"></div></div>
+        <div class="card"><div class="card-body"><h3 style="font-size:14px;margin-bottom:10px">Ventas y ganancia — últimos 12 meses</h3><div id="ctb-g-meses"></div></div></div>
+        <div class="card"><div class="card-body"><h3 style="font-size:14px;margin-bottom:10px">Flujo de caja — últimos 12 meses</h3><div id="ctb-g-caja"></div></div></div>
+        <div class="card"><div class="card-body"><h3 style="font-size:14px;margin-bottom:10px">Ventas por grupo (Gloria, Luis, Edgardo…)</h3><div id="ctb-g-grupos"></div></div></div>
+        <div class="card"><div class="card-body"><h3 style="font-size:14px;margin-bottom:10px">Ventas por categoría de producto</h3><div id="ctb-g-categorias"></div></div></div>
+        <div class="card"><div class="card-body"><h3 style="font-size:14px;margin-bottom:10px">Top 10 clientes por ventas</h3><div id="ctb-g-clientes"></div></div></div>
+        <div class="card"><div class="card-body"><h3 style="font-size:14px;margin-bottom:10px">Top 10 productos por ganancia</h3><div id="ctb-g-productos"></div></div></div>
+        <div class="card"><div class="card-body"><h3 style="font-size:14px;margin-bottom:10px">Antigüedad de lo que nos deben</h3><div id="ctb-g-aging"></div></div></div>
+        <div class="card"><div class="card-body"><h3 style="font-size:14px;margin-bottom:10px">Top 10 deudores</h3><div id="ctb-g-deudores"></div></div></div>
+        <div class="card"><div class="card-body"><h3 style="font-size:14px;margin-bottom:4px">Mayor valor en stock (a costo)</h3><div style="font-size:11px;color:var(--text3);margin-bottom:8px">Revisá que el stock y el costo estén en la misma unidad: un error acá infla el balance.</div><div id="ctb-g-stock"></div></div></div>
+        <div class="card"><div class="card-body"><h3 style="font-size:14px;margin-bottom:10px">Caja por medio de pago (período)</h3><div id="ctb-g-medios"></div></div></div>
+        <div class="card"><div class="card-body"><div id="ctb-g-gastos"></div></div></div>
+      </div>
+      <div style="font-size:12px;color:var(--text3);margin-top:4px">Ventas = suma de los productos de cada boleta (sin la deuda anterior), sin contar rechazadas ni vencidas. Si un producto no tiene costo, se toma como costo el mismo precio de venta. Los gastos son las salidas cargadas en Caja.</div>
     </div>
 
     <!-- VENTAS -->
@@ -1272,7 +1308,7 @@ function alternarTema(){
 let rolActual = null; // 'admin' | 'empleado'
 
 const SECCIONES_EMPLEADO = ['dashboard','clientes','presupuestos','entrega','deudores','afavor','proveedores'];
-const SECCIONES_ADMIN    = ['dashboard','productos','listas','clientes','presupuestos','entrega','deudores','afavor','caja','proveedores','ganancia','ventas','actividad','config'];
+const SECCIONES_ADMIN    = ['dashboard','productos','listas','clientes','presupuestos','entrega','deudores','afavor','caja','proveedores','ganancia','ventas','contabilidad','actividad','config'];
 
 function getPassword(){ return db.config?.password || '1234'; }
 
@@ -1407,7 +1443,7 @@ function aplicarRol(){
   actualizarBarraResumen();
   var bm=document.getElementById('btn-masiva'); if(bm) bm.style.display=esAdmin?'':'none';
   // Ocultar nav items que no corresponden al empleado
-  const itemsAdmin = ['listas','caja','ganancia','ventas','config','actividad'];
+  const itemsAdmin = ['listas','caja','ganancia','ventas','contabilidad','config','actividad'];
   itemsAdmin.forEach(sec=>{
     document.querySelectorAll(\`.nav-item\`).forEach(el=>{
       if(el.getAttribute('onclick')?.includes(\`'\${sec}'\`)){
@@ -1543,7 +1579,7 @@ function showSection(id, el) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   el.classList.add('active');
-  ({ dashboard: renderDashboard, productos: ()=>renderProductos(), clientes: ()=>renderClientes(), listas: ()=>renderLista(), presupuestos: renderPresupuestos, entrega: renderEntrega, deudores: renderDeudores, afavor: renderAfavor, caja: renderCaja, proveedores: renderProveedores, ganancia: ()=>{}, ventas: iniciarVentas, actividad: renderActividad, config: cargarConfig })[id]?.();
+  ({ dashboard: renderDashboard, productos: ()=>renderProductos(), clientes: ()=>renderClientes(), listas: ()=>renderLista(), presupuestos: renderPresupuestos, entrega: renderEntrega, deudores: renderDeudores, afavor: renderAfavor, caja: renderCaja, proveedores: renderProveedores, ganancia: ()=>{}, ventas: iniciarVentas, contabilidad: iniciarContabilidad, actividad: renderActividad, config: cargarConfig })[id]?.();
 }
 
 let editIdx = null;
@@ -4560,6 +4596,247 @@ function mostrarGanancia(idx){
   document.getElementById('gan-ganancia').textContent='$'+fmt(ganBruta);
   document.getElementById('gan-margen').textContent='Margen: '+margenTotal+'%';
   document.getElementById('gan-aviso').style.display=sinCosto?'block':'none';
+}
+
+// ---- CONTABILIDAD ----
+var CTB_MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+var ctbIniciado = false;
+function ctbEsc(t){ return String(t == null ? '' : t).split('&').join('&amp;').split('<').join('&lt;').split('>').join('&gt;'); }
+function ctbMoney(n){ return n < 0 ? '-$' + fmt(-n) : '$' + fmt(n); }
+function iniciarContabilidad(){
+  if(!ctbIniciado){ ctbIniciado = true; ctbPeriodo('mes'); return; }
+  renderContabilidad();
+}
+function ctbPeriodo(tipo){
+  var h = new Date(), y = h.getFullYear(), m = h.getMonth(), desde = '', hasta = '';
+  if(tipo === 'mes'){ desde = fechaISO(new Date(y, m, 1)); hasta = fechaISO(new Date(y, m + 1, 0)); }
+  else if(tipo === 'mesant'){ desde = fechaISO(new Date(y, m - 1, 1)); hasta = fechaISO(new Date(y, m, 0)); }
+  else if(tipo === 'anio'){ desde = y + '-01-01'; hasta = y + '-12-31'; }
+  document.getElementById('ctb-desde').value = desde;
+  document.getElementById('ctb-hasta').value = hasta;
+  renderContabilidad();
+}
+function ctbGrupo(cli){
+  if(!cli) return 'Consumidor final';
+  var real = db.clientes.find(function(x){ return x.nombre === cli.nombre; });
+  var cod = ((real && real.codigo) || cli.codigo || '').toUpperCase();
+  if(cod === 'G') return 'Gloria';
+  if(cod === 'L') return 'Luis';
+  if(cod === 'E') return 'Edgardo';
+  if(real && real.lista_precio && real.lista_precio !== 'General') return real.lista_precio;
+  return 'Sin asignar / General';
+}
+// ventas y costo de una boleta (sin la deuda anterior). Sin costo cargado: costo = precio de venta
+function ctbBoleta(p){
+  var r = { v: 0, c: 0, sinCosto: 0, lineas: [] };
+  (p.lineas || []).forEach(function(l){
+    var prod = buscarProdDeLinea(l), cant = l.cant || 0, v = cant * (l.precio || 0);
+    var tiene = !!(prod && prod.costo > 0);
+    var c = cant * (tiene ? prod.costo : (l.precio || 0));
+    if(!tiene) r.sinCosto++;
+    r.v += v; r.c += c;
+    r.lineas.push({ prod: prod, nombre: prod ? prod.nombre : (l.nombre || '?'), cat: (prod && prod.categoria) || 'Sin categoría', cant: cant, v: v, c: c });
+  });
+  return r;
+}
+function ctbBarrasH(items, colorVar, fmtVal){
+  if(!items.length) return '<div style="color:var(--text3);font-size:13px;padding:6px 0">Sin datos en este período</div>';
+  var max = 0; items.forEach(function(x){ if(Math.abs(x.valor) > max) max = Math.abs(x.valor); });
+  if(max <= 0) max = 1;
+  return items.map(function(x){
+    var w = Math.max(1, Math.round(Math.abs(x.valor) / max * 100));
+    var col = x.valor < 0 ? 'var(--red)' : colorVar;
+    return '<div style="margin-bottom:7px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px"><span>' + ctbEsc(x.label) + '</span><strong>' + (fmtVal ? fmtVal(x.valor) : ctbMoney(x.valor)) + (x.extra ? ' <span style="color:var(--text3);font-weight:400">' + x.extra + '</span>' : '') + '</strong></div>' +
+      '<div style="background:var(--bg);border-radius:4px;height:10px"><div style="width:' + w + '%;height:10px;border-radius:4px;background:' + col + '"></div></div></div>';
+  }).join('');
+}
+function ctbBarrasV(meses, series){
+  var max = 0;
+  meses.forEach(function(m){ series.forEach(function(s){ var v = Math.abs(m[s.key] || 0); if(v > max) max = v; }); });
+  if(max <= 0) max = 1;
+  var alto = 150;
+  var leyenda = '<div style="display:flex;gap:14px;font-size:12px;margin-bottom:8px;flex-wrap:wrap">' + series.map(function(s){ return '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + s.color + ';margin-right:4px"></span>' + s.label + '</span>'; }).join('') + '</div>';
+  var cols = meses.map(function(m){
+    var barras = series.map(function(s){
+      var v = m[s.key] || 0, hh = Math.round(Math.abs(v) / max * alto);
+      return '<div title="' + s.label + ' ' + ctbMoney(v) + '" style="width:12px;height:' + Math.max(hh, v ? 2 : 0) + 'px;background:' + (v < 0 ? 'var(--red)' : s.color) + ';border-radius:2px 2px 0 0"></div>';
+    }).join('');
+    return '<div style="flex:1;min-width:34px;text-align:center"><div style="height:' + alto + 'px;display:flex;align-items:flex-end;justify-content:center;gap:2px">' + barras + '</div><div style="font-size:11px;color:var(--text3);margin-top:4px">' + m.label + '</div></div>';
+  }).join('');
+  return leyenda + '<div style="display:flex;gap:4px;overflow-x:auto;padding-bottom:4px">' + cols + '</div>';
+}
+function ctbTabla(filas, cabeza, alineaDerecha){
+  var h = '<table style="width:100%;font-size:13px"><thead><tr>' + cabeza.map(function(c, i){ return '<th' + (alineaDerecha && i > 0 ? ' style="text-align:right"' : '') + '>' + c + '</th>'; }).join('') + '</tr></thead><tbody>';
+  h += filas.map(function(f){
+    return '<tr' + (f.negrita ? ' style="font-weight:700;background:var(--bg)"' : '') + '>' + f.celdas.map(function(c, i){ return '<td' + (alineaDerecha && i > 0 ? ' style="text-align:right"' : '') + '>' + c + '</td>'; }).join('') + '</tr>';
+  }).join('');
+  return h + '</tbody></table>';
+}
+var ctbUltimo = null;
+function renderContabilidad(){
+  if(rolActual !== 'admin') return;
+  var desde = document.getElementById('ctb-desde').value, hasta = document.getElementById('ctb-hasta').value;
+  function enRango(iso){ if(!iso) return false; if(desde && iso < desde) return false; if(hasta && iso > hasta) return false; return true; }
+  var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  // ---- ventas del período
+  var ventas = 0, costo = 0, nBol = 0, sinCosto = 0;
+  var porCliente = {}, porProd = {}, porGrupo = {}, porCat = {};
+  db.presupuestos.forEach(function(p){
+    if(p.estado === 'Rechazado' || p.estado === 'Vencido') return;
+    if(!enRango(p.fecha)) return;
+    var b = ctbBoleta(p);
+    ventas += b.v; costo += b.c; nBol++; sinCosto += b.sinCosto;
+    var cn = p.cliente ? p.cliente.nombre : 'Consumidor final';
+    var fc = porCliente[cn] || (porCliente[cn] = { nombre: cn, v: 0, g: 0, n: 0 }); fc.v += b.v; fc.g += b.v - b.c; fc.n++;
+    var gn = ctbGrupo(p.cliente);
+    var fg = porGrupo[gn] || (porGrupo[gn] = { nombre: gn, v: 0, g: 0 }); fg.v += b.v; fg.g += b.v - b.c;
+    b.lineas.forEach(function(l){
+      var fp = porProd[l.nombre] || (porProd[l.nombre] = { nombre: l.nombre, uni: 0, v: 0, g: 0 }); fp.uni += l.cant; fp.v += l.v; fp.g += l.v - l.c;
+      var ft = porCat[l.cat] || (porCat[l.cat] = { nombre: l.cat, v: 0, g: 0 }); ft.v += l.v; ft.g += l.v - l.c;
+    });
+  });
+  var gananciaBruta = ventas - costo;
+  // ---- caja del período
+  var entradas = 0, salidas = 0, porMedio = {}, gastos = [];
+  (db.caja || []).forEach(function(m){
+    var dt = parseFechaAR(m.fecha); if(!dt || !enRango(fechaISO(dt))) return;
+    var med = m.medio || 'Otro'; var fm = porMedio[med] || (porMedio[med] = { ent: 0, sal: 0 });
+    if(m.tipo === 'entrada'){ entradas += m.monto; fm.ent += m.monto; } else { salidas += m.monto; fm.sal += m.monto; gastos.push(m); }
+  });
+  var resultado = gananciaBruta - salidas;
+  // ---- balance a hoy
+  var efectivo = 0, banco = 0;
+  (db.caja || []).forEach(function(m){
+    var s = (m.tipo === 'entrada' ? 1 : -1) * m.monto;
+    if(m.medio === 'Efectivo') efectivo += s; else banco += s;
+  });
+  var porCobrar = 0, aFavor = 0, deudores = {}, aging = [0, 0, 0, 0, 0], nDeudas = 0;
+  db.presupuestos.forEach(function(p){
+    if(p.estado === 'Rechazado' || p.estado === 'Vencido') return;
+    var sd = saldoPendienteBoleta(p);
+    if(sd < -0.01){ aFavor += -sd; return; }
+    if(sd > 0.01 && p.estado === 'Pendiente'){
+      porCobrar += sd; nDeudas++;
+      var cn = p.cliente ? p.cliente.nombre : 'Consumidor final';
+      deudores[cn] = (deudores[cn] || 0) + sd;
+      var dias = p.fecha ? Math.floor((hoy - new Date(p.fecha + 'T12:00:00')) / 86400000) : 0;
+      var k = dias <= 7 ? 0 : dias <= 15 ? 1 : dias <= 30 ? 2 : dias <= 60 ? 3 : 4;
+      aging[k] += sd;
+    }
+  });
+  var stockCosto = 0, stockVenta = 0, prodSinCosto = 0, stockItems = [];
+  db.productos.forEach(function(pr){
+    var st = Math.max(0, pr.stock || 0);
+    if(pr.costo > 0){ stockCosto += st * pr.costo; stockItems.push({ label: pr.nombre, valor: st * pr.costo, extra: st + ' u. x ' + ctbMoney(pr.costo) }); } else if(st > 0) prodSinCosto++;
+    stockVenta += st * getPrecioGeneral(pr);
+  });
+  var totalActivo = efectivo + banco + porCobrar + stockCosto;
+  var patrimonio = totalActivo - aFavor;
+  // ---- últimos 12 meses
+  var meses = [];
+  for(var i = 11; i >= 0; i--){
+    var f = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+    meses.push({ key: f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0'), label: CTB_MESES[f.getMonth()] + (f.getMonth() === 0 ? ' ' + String(f.getFullYear()).slice(2) : ''), v: 0, g: 0, ent: 0, sal: 0 });
+  }
+  var mapaM = {}; meses.forEach(function(m){ mapaM[m.key] = m; });
+  db.presupuestos.forEach(function(p){
+    if(p.estado === 'Rechazado' || p.estado === 'Vencido' || !p.fecha) return;
+    var m = mapaM[p.fecha.slice(0, 7)]; if(!m) return;
+    var b = ctbBoleta(p); m.v += b.v; m.g += b.v - b.c;
+  });
+  (db.caja || []).forEach(function(c){
+    var dt = parseFechaAR(c.fecha); if(!dt) return;
+    var m = mapaM[fechaISO(dt).slice(0, 7)]; if(!m) return;
+    if(c.tipo === 'entrada') m.ent += c.monto; else m.sal += c.monto;
+  });
+  // ---- dibujar
+  var pct = function(a, b){ return b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'; };
+  var kpi = function(label, val, sub, cls, color){ return '<div class="stat-card ' + (cls || '') + '"><div class="slabel">' + label + '</div><div class="svalue" style="font-size:20px' + (color ? ';color:' + color : '') + '">' + val + '</div><div class="ssub">' + (sub || '&nbsp;') + '</div></div>'; };
+  document.getElementById('ctb-kpis').innerHTML =
+    kpi('Ventas', ctbMoney(ventas), nBol + ' boletas · ticket prom. ' + ctbMoney(nBol ? ventas / nBol : 0), 'stat-blue') +
+    kpi('Costo de lo vendido', ctbMoney(costo), sinCosto ? sinCosto + ' línea(s) sin costo (se toman a precio de venta)' : '') +
+    kpi('Ganancia bruta', ctbMoney(gananciaBruta), 'Margen ' + pct(gananciaBruta, ventas), 'stat-green') +
+    kpi('Gastos y retiros (caja)', ctbMoney(salidas), 'Salidas de Caja del período', '', 'var(--red)') +
+    kpi('Resultado del período', ctbMoney(resultado), 'Ganancia bruta − gastos', resultado >= 0 ? 'stat-green' : '', resultado < 0 ? 'var(--red)' : '') +
+    kpi('Cobrado (entradas de caja)', ctbMoney(entradas), 'Neto de caja: ' + ctbMoney(entradas - salidas), 'stat-amber');
+  document.getElementById('ctb-resultados').innerHTML = ctbTabla([
+    { celdas: ['Ventas (sin deuda anterior)', ctbMoney(ventas)] },
+    { celdas: ['(−) Costo de la mercadería vendida', ctbMoney(-costo)] },
+    { celdas: ['= Ganancia bruta', ctbMoney(gananciaBruta) + ' (' + pct(gananciaBruta, ventas) + ')'], negrita: true },
+    { celdas: ['(−) Gastos y retiros (salidas de Caja)', ctbMoney(-salidas)] },
+    { celdas: ['= Resultado del período', ctbMoney(resultado)], negrita: true }
+  ], ['Estado de resultados', 'Importe'], true);
+  document.getElementById('ctb-balance').innerHTML = ctbTabla([
+    { celdas: ['Caja en efectivo', ctbMoney(efectivo)] },
+    { celdas: ['Banco / transferencias / tarjetas', ctbMoney(banco)] },
+    { celdas: ['Cuentas a cobrar (Deudores)', ctbMoney(porCobrar) + ' · ' + nDeudas + ' boletas'] },
+    { celdas: ['Mercadería en stock (a costo)', ctbMoney(stockCosto)] },
+    { celdas: ['TOTAL ACTIVO', ctbMoney(totalActivo)], negrita: true },
+    { celdas: ['Saldos a favor de clientes', ctbMoney(aFavor)] },
+    { celdas: ['TOTAL PASIVO', ctbMoney(aFavor)], negrita: true },
+    { celdas: ['PATRIMONIO NETO (activo − pasivo)', ctbMoney(patrimonio)], negrita: true }
+  ], ['Balance a hoy', 'Importe'], true) +
+    '<div style="font-size:12px;color:var(--text3);margin-top:8px">Stock a precio de venta: ' + ctbMoney(stockVenta) + ' (ganancia potencial ' + ctbMoney(stockVenta - stockCosto) + ').' + (prodSinCosto ? ' ' + prodSinCosto + ' producto(s) con stock no tienen costo cargado y no suman al stock a costo.' : '') + ' No se cargan deudas con proveedores porque el sistema no las registra.</div>';
+  document.getElementById('ctb-g-meses').innerHTML = ctbBarrasV(meses, [{ key: 'v', label: 'Ventas', color: '#185FA5' }, { key: 'g', label: 'Ganancia bruta', color: '#3B6D11' }]);
+  document.getElementById('ctb-g-caja').innerHTML = ctbBarrasV(meses, [{ key: 'ent', label: 'Entradas', color: '#3B6D11' }, { key: 'sal', label: 'Salidas', color: '#A32D2D' }]);
+  var arr = function(o){ return Object.keys(o).map(function(k){ return o[k]; }); };
+  document.getElementById('ctb-g-grupos').innerHTML = ctbBarrasH(arr(porGrupo).sort(function(a, b){ return b.v - a.v; }).map(function(x){ return { label: x.nombre, valor: x.v, extra: pct(x.v, ventas) + ' · gan. ' + ctbMoney(x.g) }; }), '#185FA5');
+  document.getElementById('ctb-g-clientes').innerHTML = ctbBarrasH(arr(porCliente).sort(function(a, b){ return b.v - a.v; }).slice(0, 10).map(function(x){ return { label: x.nombre, valor: x.v, extra: x.n + ' bol.' }; }), '#185FA5');
+  document.getElementById('ctb-g-productos').innerHTML = ctbBarrasH(arr(porProd).sort(function(a, b){ return b.g - a.g; }).slice(0, 10).map(function(x){ return { label: x.nombre, valor: x.g, extra: Math.round(x.uni) + ' u.' }; }), '#3B6D11');
+  document.getElementById('ctb-g-categorias').innerHTML = ctbBarrasH(arr(porCat).sort(function(a, b){ return b.v - a.v; }).map(function(x){ return { label: x.nombre, valor: x.v, extra: 'gan. ' + ctbMoney(x.g) }; }), '#854F0B');
+  document.getElementById('ctb-g-stock').innerHTML = ctbBarrasH(stockItems.sort(function(a, b){ return b.valor - a.valor; }).slice(0, 10), '#7B3FB0');
+  var etiq = ['0 a 7 días', '8 a 15 días', '16 a 30 días', '31 a 60 días', 'Más de 60 días'];
+  document.getElementById('ctb-g-aging').innerHTML = ctbBarrasH(aging.map(function(v, i){ return { label: etiq[i], valor: v, extra: pct(v, porCobrar) }; }), '#A32D2D');
+  document.getElementById('ctb-g-deudores').innerHTML = ctbBarrasH(Object.keys(deudores).map(function(k){ return { label: k, valor: deudores[k] }; }).sort(function(a, b){ return b.valor - a.valor; }).slice(0, 10), '#A32D2D');
+  document.getElementById('ctb-g-medios').innerHTML = ctbTabla(Object.keys(porMedio).map(function(k){ return { celdas: [ctbEsc(k), ctbMoney(porMedio[k].ent), ctbMoney(porMedio[k].sal), ctbMoney(porMedio[k].ent - porMedio[k].sal)] }; }), ['Medio', 'Entradas', 'Salidas', 'Neto'], true);
+  document.getElementById('ctb-g-gastos').innerHTML = gastos.length ? ctbTabla(gastos.slice().sort(function(a, b){ return b.monto - a.monto; }).slice(0, 10).map(function(m){ return { celdas: [ctbEsc(m.fecha + ' — ' + (m.desc || '')), ctbMoney(m.monto)] }; }), ['Mayores salidas del período', 'Importe'], true) : '<div style="color:var(--text3);font-size:13px">Sin salidas de caja en este período</div>';
+  ctbUltimo = { desde: desde, hasta: hasta, ventas: ventas, costo: costo, gananciaBruta: gananciaBruta, salidas: salidas, resultado: resultado, entradas: entradas, efectivo: efectivo, banco: banco, porCobrar: porCobrar, stockCosto: stockCosto, totalActivo: totalActivo, aFavor: aFavor, patrimonio: patrimonio, meses: meses, clientes: arr(porCliente), productos: arr(porProd), grupos: arr(porGrupo), deudores: deudores };
+}
+function descargarContabilidad(){
+  if(rolActual !== 'admin' || !ctbUltimo) return;
+  var r = ctbUltimo, NL = String.fromCharCode(13, 10), Q = String.fromCharCode(34);
+  function cel(v){ return Q + String(v).split(Q).join(Q + Q) + Q; }
+  function num(n){ return (Math.round(n * 100) / 100).toFixed(2).replace('.', ','); }
+  function fa(iso){ return iso ? new Date(iso + 'T12:00:00').toLocaleDateString('es-AR') : ''; }
+  var o = [];
+  o.push(cel('Contabilidad Distribuidora HAP') + ';' + cel('Del ' + (fa(r.desde) || 'inicio') + ' al ' + (fa(r.hasta) || 'hoy')));
+  o.push('');
+  o.push(cel('ESTADO DE RESULTADOS') + ';');
+  o.push(cel('Ventas') + ';' + num(r.ventas));
+  o.push(cel('Costo de la mercaderia vendida') + ';' + num(r.costo));
+  o.push(cel('Ganancia bruta') + ';' + num(r.gananciaBruta));
+  o.push(cel('Gastos y retiros (salidas de caja)') + ';' + num(r.salidas));
+  o.push(cel('Resultado del periodo') + ';' + num(r.resultado));
+  o.push('');
+  o.push(cel('BALANCE A HOY') + ';');
+  o.push(cel('Caja en efectivo') + ';' + num(r.efectivo));
+  o.push(cel('Banco / transferencias / tarjetas') + ';' + num(r.banco));
+  o.push(cel('Cuentas a cobrar') + ';' + num(r.porCobrar));
+  o.push(cel('Mercaderia en stock a costo') + ';' + num(r.stockCosto));
+  o.push(cel('TOTAL ACTIVO') + ';' + num(r.totalActivo));
+  o.push(cel('Saldos a favor de clientes (pasivo)') + ';' + num(r.aFavor));
+  o.push(cel('PATRIMONIO NETO') + ';' + num(r.patrimonio));
+  o.push('');
+  o.push(cel('VENTAS Y GANANCIA POR MES (ultimos 12)') + ';' + cel('Ventas') + ';' + cel('Ganancia bruta') + ';' + cel('Entradas caja') + ';' + cel('Salidas caja'));
+  r.meses.forEach(function(m){ o.push(cel(m.key) + ';' + num(m.v) + ';' + num(m.g) + ';' + num(m.ent) + ';' + num(m.sal)); });
+  o.push('');
+  o.push(cel('VENTAS POR GRUPO') + ';' + cel('Ventas') + ';' + cel('Ganancia'));
+  r.grupos.sort(function(a, b){ return b.v - a.v; }).forEach(function(x){ o.push(cel(x.nombre) + ';' + num(x.v) + ';' + num(x.g)); });
+  o.push('');
+  o.push(cel('CLIENTES') + ';' + cel('Ventas') + ';' + cel('Ganancia') + ';' + cel('Boletas'));
+  r.clientes.sort(function(a, b){ return b.v - a.v; }).forEach(function(x){ o.push(cel(x.nombre) + ';' + num(x.v) + ';' + num(x.g) + ';' + x.n); });
+  o.push('');
+  o.push(cel('PRODUCTOS') + ';' + cel('Unidades') + ';' + cel('Ventas') + ';' + cel('Ganancia'));
+  r.productos.sort(function(a, b){ return b.g - a.g; }).forEach(function(x){ o.push(cel(x.nombre) + ';' + num(x.uni) + ';' + num(x.v) + ';' + num(x.g)); });
+  o.push('');
+  o.push(cel('DEUDORES') + ';' + cel('Saldo'));
+  Object.keys(r.deudores).sort(function(a, b){ return r.deudores[b] - r.deudores[a]; }).forEach(function(k){ o.push(cel(k) + ';' + num(r.deudores[k])); });
+  var blob = new Blob([String.fromCharCode(0xFEFF) + o.join(NL)], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'contabilidad-' + (r.desde || 'inicio') + '-a-' + (r.hasta || 'hoy') + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
 }
 
 // ---- VENTAS ----

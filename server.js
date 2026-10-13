@@ -255,6 +255,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
     <div class="nav-section">
       <div class="nav-label">Gestión</div>
       <div class="nav-item" onclick="showSection('productos',this)">📦 Productos / Stock</div>
+      <div class="nav-item" onclick="showSection('controlstock',this)">📋 Control de stock</div>
       <div class="nav-item" onclick="showSection('listas',this)">💲 Listas de precios</div>
       <div class="nav-item" onclick="showSection('clientes',this)">👥 Clientes</div>
       <div class="nav-item" onclick="showSection('presupuestos',this)">📋 Presupuestos</div>
@@ -722,6 +723,30 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
       </div>
     </div>
 
+    <!-- CONTROL DE STOCK -->
+    <div id="controlstock" class="section">
+      <div class="section-header">
+        <h2>Control de stock semanal 📋</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" onclick="csLimpiar()">Borrar lo escrito</button>
+          <button class="btn btn-green" onclick="csAplicar()">✅ Aplicar control</button>
+        </div>
+      </div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Escribí lo que contaste de cada producto (Enter pasa al siguiente). Lo que dejes vacío no se toca. El stock guardado no se cuenta acá. Al aplicar, el stock queda como lo contaste.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+        <input type="search" id="cs-buscar" placeholder="🔍 Buscar producto..." oninput="renderControlStock()" style="flex:1;min-width:200px;max-width:340px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px">
+        <select id="cs-cat" class="inp" onchange="renderControlStock()" style="width:auto"></select>
+        <label style="font-size:13px"><input type="checkbox" id="cs-ocultar-cero" checked onchange="renderControlStock()"> Ocultar los que tienen stock 0</label>
+        <label style="font-size:13px"><input type="checkbox" id="cs-solo-sin" onchange="renderControlStock()"> Solo los que faltan contar</label>
+        <span id="cs-resumen" style="font-size:12px;color:var(--text3)"></span>
+      </div>
+      <div class="card">
+        <table><thead><tr><th>Producto</th><th>Categoría</th><th style="text-align:right">En el sistema</th><th style="text-align:right">Contado</th><th style="text-align:right">Diferencia</th><th></th></tr></thead>
+        <tbody id="cs-tabla"></tbody></table>
+      </div>
+      <div class="card"><div class="card-body"><h3 style="font-size:14px;margin-bottom:8px">Últimos controles</h3><div id="cs-historial"></div></div></div>
+    </div>
+
     <!-- CONTABILIDAD -->
     <div id="contabilidad" class="section">
       <div class="section-header">
@@ -1160,6 +1185,9 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
       <div class="form-group"><label>Stock actual</label><input type="number" id="p-stock" placeholder="0"></div>
       <div class="form-group"><label>Stock mínimo (alerta)</label><input type="number" id="p-minimo" placeholder="10"></div>
     </div>
+    <div class="form-grid form-grid-2" style="margin-bottom:12px">
+      <div class="form-group"><label>Stock guardado (reserva, no se cuenta)</label><input type="number" id="p-guardado" placeholder="0"></div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-danger" id="btn-eliminar-prod" style="display:none;margin-right:auto" onclick="eliminarProductoDesdeModal()">🗑️ Eliminar producto</button>
       <button class="btn" onclick="cerrarModales()">Cancelar</button>
@@ -1308,7 +1336,7 @@ function alternarTema(){
 let rolActual = null; // 'admin' | 'empleado'
 
 const SECCIONES_EMPLEADO = ['dashboard','clientes','presupuestos','entrega','deudores','afavor','proveedores'];
-const SECCIONES_ADMIN    = ['dashboard','productos','listas','clientes','presupuestos','entrega','deudores','afavor','caja','proveedores','ganancia','ventas','contabilidad','actividad','config'];
+const SECCIONES_ADMIN    = ['dashboard','productos','controlstock','listas','clientes','presupuestos','entrega','deudores','afavor','caja','proveedores','ganancia','ventas','contabilidad','actividad','config'];
 
 function getPassword(){ return db.config?.password || '1234'; }
 
@@ -1443,7 +1471,7 @@ function aplicarRol(){
   actualizarBarraResumen();
   var bm=document.getElementById('btn-masiva'); if(bm) bm.style.display=esAdmin?'':'none';
   // Ocultar nav items que no corresponden al empleado
-  const itemsAdmin = ['listas','caja','ganancia','ventas','contabilidad','config','actividad'];
+  const itemsAdmin = ['controlstock','listas','caja','ganancia','ventas','contabilidad','config','actividad'];
   itemsAdmin.forEach(sec=>{
     document.querySelectorAll(\`.nav-item\`).forEach(el=>{
       if(el.getAttribute('onclick')?.includes(\`'\${sec}'\`)){
@@ -1556,6 +1584,7 @@ async function cargarDesdeServidor() {
       if(!db.empleados)    db.empleados    = [];
       if(!db.listas_precio) db.listas_precio = {};
       if(!db.listas_margen) db.listas_margen = {};
+      if(!db.controles_stock) db.controles_stock = [];
       ordenarDatos();
       localStorage.setItem('hap_db', JSON.stringify(db));
       console.log('✅ Datos del servidor cargados');
@@ -1579,7 +1608,7 @@ function showSection(id, el) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   el.classList.add('active');
-  ({ dashboard: renderDashboard, productos: ()=>renderProductos(), clientes: ()=>renderClientes(), listas: ()=>renderLista(), presupuestos: renderPresupuestos, entrega: renderEntrega, deudores: renderDeudores, afavor: renderAfavor, caja: renderCaja, proveedores: renderProveedores, ganancia: ()=>{}, ventas: iniciarVentas, contabilidad: iniciarContabilidad, actividad: renderActividad, config: cargarConfig })[id]?.();
+  ({ dashboard: renderDashboard, productos: ()=>renderProductos(), clientes: ()=>renderClientes(), listas: ()=>renderLista(), presupuestos: renderPresupuestos, entrega: renderEntrega, deudores: renderDeudores, afavor: renderAfavor, caja: renderCaja, proveedores: renderProveedores, ganancia: ()=>{}, ventas: iniciarVentas, contabilidad: iniciarContabilidad, controlstock: iniciarControlStock, actividad: renderActividad, config: cargarConfig })[id]?.();
 }
 
 let editIdx = null;
@@ -1595,7 +1624,7 @@ function abrirModalProducto(idx) {
   document.getElementById('modal-producto').classList.add('open');
   document.getElementById('titulo-mod-prod').textContent = idx!==undefined ? 'Editar producto' : 'Nuevo producto';
   document.getElementById('btn-eliminar-prod').style.display = idx!==undefined ? 'inline-flex' : 'none';
-  const campos = ['p-nombre','p-medida','p-unidad','p-codigo','p-costo','p-precio','p-margen','p-stock','p-minimo'];
+  const campos = ['p-nombre','p-medida','p-unidad','p-codigo','p-costo','p-precio','p-margen','p-stock','p-minimo','p-guardado'];
   campos.forEach(id => document.getElementById(id).value='');
   // Cargar opciones de proveedores
   const selProv = document.getElementById('p-proveedor');
@@ -1607,7 +1636,7 @@ function abrirModalProducto(idx) {
     document.getElementById('p-medida').value=p.medida||''; document.getElementById('p-unidad').value=p.unidad||'';
     document.getElementById('p-codigo').value=p.codigo||''; document.getElementById('p-costo').value=p.costo;
     document.getElementById('p-precio').value=p.precio; document.getElementById('p-stock').value=p.stock;
-    document.getElementById('p-minimo').value=p.minimo;
+    document.getElementById('p-minimo').value=p.minimo; document.getElementById('p-guardado').value=p.guardado||'';
     selProv.value = p.proveedor||'';
     calcMargen();
   }
@@ -1665,7 +1694,7 @@ function guardarProducto() {
   const p={ nombre, categoria:document.getElementById('p-cat').value, medida:document.getElementById('p-medida').value.trim(),
     unidad:document.getElementById('p-unidad').value.trim()||'unidad', codigo:document.getElementById('p-codigo').value.trim(),
     costo:parseFloat(document.getElementById('p-costo').value)||0, precio:parseFloat(document.getElementById('p-precio').value)||0,
-    stock:parseInt(document.getElementById('p-stock').value)||0, minimo:parseInt(document.getElementById('p-minimo').value)||5,
+    stock:parseInt(document.getElementById('p-stock').value)||0, minimo:parseInt(document.getElementById('p-minimo').value)||5, guardado:parseFloat(document.getElementById('p-guardado').value)||0,
     proveedor:document.getElementById('p-proveedor').value||'' };
   var viejo = editIdx!==null ? db.productos[editIdx] : null;
   p.id = (viejo && viejo.id) ? viejo.id : nuevoIdProd();
@@ -1697,7 +1726,7 @@ function renderProductos(filtro=''){
       <td style="font-size:12px">\${p.medida||'—'}</td>
       <td class="col-costo"\${rolActual!=='admin'?' style="display:none"':''}>$\${fmt(p.costo)}</td>
       <td><strong>$\${fmt(p.precio)}</strong></td>
-      <td>\${p.stock} <span style="font-size:11px;color:var(--text3)">\${p.unidad}</span></td><td>\${estadoBadge(p)}</td>
+      <td>\${p.stock} <span style="font-size:11px;color:var(--text3)">\${p.unidad}</span>\${p.guardado>0?'<div style="font-size:11px;color:var(--text3)">+'+p.guardado+' guardados</div>':''}</td><td>\${estadoBadge(p)}</td>
       <td style="white-space:nowrap"><button class="btn btn-sm" onclick="abrirModalProducto(\${i})">✏️</button> <button class="btn btn-sm btn-danger" onclick="eliminarProducto(\${i})">🗑️</button></td>
     </tr>\`;
   };
@@ -1724,6 +1753,7 @@ var PG_COLS = [
   { f: 'costo', t: 'P. costo', w: 95, tipo: 'num' },
   { f: 'precio', t: 'P. venta', w: 95, tipo: 'num' },
   { f: 'stock', t: 'Stock', w: 80, tipo: 'num' },
+  { f: 'guardado', t: 'Guardado (no se cuenta)', w: 110, tipo: 'num' },
   { f: 'minimo', t: 'Mínimo', w: 75, tipo: 'num' },
   { f: 'proveedor', t: 'Proveedor', w: 140, tipo: 'txt', dl: 'pg-dl-prov' }
 ];
@@ -4598,6 +4628,137 @@ function mostrarGanancia(idx){
   document.getElementById('gan-aviso').style.display=sinCosto?'block':'none';
 }
 
+// ---- CONTROL DE STOCK SEMANAL ----
+var csValores = {};      // lo que se fue escribiendo: { indiceProducto: 'texto' }
+var csSucio = false;
+function csNum(v){ var n = listasNum(String(v == null ? '' : v)); return n; }
+function iniciarControlStock(){
+  if(!db.controles_stock) db.controles_stock = [];
+  var cats = {};
+  db.productos.forEach(function(p){ if(p.categoria) cats[p.categoria] = true; });
+  var sel = document.getElementById('cs-cat'), actual = sel.value;
+  sel.innerHTML = '<option value="">Todas las categorías</option>' + Object.keys(cats).sort(function(a, b){ return a.localeCompare(b, 'es'); }).map(function(c){ return '<option>' + ctbEsc(c) + '</option>'; }).join('');
+  sel.value = actual;
+  renderControlStock();
+}
+function csVisibles(){
+  var q = (document.getElementById('cs-buscar').value || '').toLowerCase().trim();
+  var cat = document.getElementById('cs-cat').value;
+  var ocultarCero = document.getElementById('cs-ocultar-cero').checked;
+  var soloSin = document.getElementById('cs-solo-sin').checked;
+  var r = [];
+  db.productos.forEach(function(p, k){
+    if(cat && p.categoria !== cat) return;
+    if(ocultarCero && !(p.stock > 0) && csValores[k] === undefined) return;
+    if(soloSin && csValores[k] !== undefined && csValores[k] !== '') return;
+    if(q){
+      var t = ((p.nombre || '') + ' ' + (p.medida || '') + ' ' + (p.codigo || '')).toLowerCase();
+      if(!q.split(' ').every(function(w){ return t.indexOf(w) > -1; })) return;
+    }
+    r.push(k);
+  });
+  r.sort(function(a, b){ return (db.productos[a].nombre || '').localeCompare(db.productos[b].nombre || '', 'es'); });
+  return r;
+}
+function renderControlStock(){
+  if(rolActual !== 'admin') return;
+  var ks = csVisibles(), h = '';
+  ks.forEach(function(k){
+    var p = db.productos[k], v = csValores[k] === undefined ? '' : csValores[k];
+    h += '<tr data-k="' + k + '"><td><strong>' + ctbEsc(p.nombre) + '</strong>' + (p.medida ? '<div style="font-size:11px;color:var(--text3)">' + ctbEsc(p.medida) + '</div>' : '') + '</td>' +
+      '<td style="color:var(--text2);font-size:12px">' + ctbEsc(p.categoria || '') + '</td>' +
+      '<td style="text-align:right;font-weight:600">' + (p.stock || 0) + ' <span style="font-size:11px;color:var(--text3);font-weight:400">' + ctbEsc(p.unidad || '') + '</span>' + (p.guardado > 0 ? '<div style="font-size:11px;color:var(--text3);font-weight:400">+' + p.guardado + ' guardados (no se cuentan)</div>' : '') + '</td>' +
+      '<td style="text-align:right"><input type="text" inputmode="decimal" class="inp cs-in" data-k="' + k + '" value="' + ctbEsc(v) + '" placeholder="—" style="width:90px;text-align:right" oninput="csCambio(this)" onkeydown="csTecla(event,this)"></td>' +
+      '<td style="text-align:right;width:90px" id="cs-dif-' + k + '"></td>' +
+      '<td><button class="btn btn-sm" title="Está bien, coincide con el sistema" onclick="csIgual(' + k + ')">✔</button></td></tr>';
+  });
+  document.getElementById('cs-tabla').innerHTML = h || '<tr class="empty-row"><td colspan="6">No hay productos con este filtro</td></tr>';
+  ks.forEach(function(k){ csPintarDif(k); });
+  csResumen();
+  csHistorial();
+}
+function csPintarDif(k){
+  var el = document.getElementById('cs-dif-' + k); if(!el) return;
+  var p = db.productos[k], txt = csValores[k];
+  if(txt === undefined || txt === ''){ el.innerHTML = ''; return; }
+  var n = csNum(txt);
+  if(n === null){ el.innerHTML = '<span style="color:var(--red);font-size:12px">número?</span>'; return; }
+  var d = Math.round((n - (p.stock || 0)) * 1000) / 1000;
+  el.innerHTML = d === 0 ? '<span style="color:var(--green)">✔ igual</span>' : '<strong style="color:' + (d > 0 ? 'var(--blue)' : 'var(--red)') + '">' + (d > 0 ? '+' : '') + d + '</strong>';
+}
+function csCambio(inp){
+  var k = inp.getAttribute('data-k');
+  csValores[k] = inp.value;
+  csSucio = true;
+  csPintarDif(k);
+  csResumen();
+}
+function csIgual(k){
+  csValores[k] = String(db.productos[k].stock || 0);
+  csSucio = true;
+  var inp = document.querySelector('#cs-tabla .cs-in[data-k="' + k + '"]');
+  if(inp) inp.value = csValores[k];
+  csPintarDif(k); csResumen();
+}
+function csTecla(e, inp){
+  var k = e.key;
+  if(k !== 'Enter' && k !== 'ArrowDown' && k !== 'ArrowUp') return;
+  e.preventDefault();
+  var todos = Array.prototype.slice.call(document.querySelectorAll('#cs-tabla .cs-in'));
+  var i = todos.indexOf(inp), dest = todos[i + (k === 'ArrowUp' ? -1 : 1)];
+  if(dest){ dest.focus(); dest.select(); }
+}
+function csCalculo(){
+  var cambios = [], iguales = 0, malos = 0;
+  Object.keys(csValores).forEach(function(k){
+    var txt = csValores[k]; if(txt === '' || txt === undefined) return;
+    var p = db.productos[k]; if(!p) return;
+    var n = csNum(txt);
+    if(n === null){ malos++; return; }
+    if(Math.abs(n - (p.stock || 0)) < 0.0005) iguales++; else cambios.push({ k: parseInt(k, 10), nombre: p.nombre, antes: p.stock || 0, despues: n });
+  });
+  return { cambios: cambios, iguales: iguales, malos: malos };
+}
+function csResumen(){
+  var r = csCalculo();
+  var contados = r.cambios.length + r.iguales;
+  document.getElementById('cs-resumen').textContent = contados + ' contado' + (contados !== 1 ? 's' : '') + ' · ' + r.cambios.length + ' con diferencia · ' + r.iguales + ' coinciden' + (r.malos ? ' · ' + r.malos + ' con número inválido' : '');
+}
+function csHistorial(){
+  var l = (db.controles_stock || []).slice(-5).reverse();
+  var el = document.getElementById('cs-historial');
+  if(!l.length){ el.innerHTML = '<div style="color:var(--text3);font-size:13px">Todavía no hiciste ningún control.</div>'; return; }
+  el.innerHTML = l.map(function(c){
+    return '<details style="margin-bottom:6px"><summary style="cursor:pointer;font-size:13px"><strong>' + ctbEsc(c.fecha) + '</strong> · ' + ctbEsc(c.usuario || '') + ' · ' + (c.cambios || []).length + ' ajuste(s)</summary><div style="font-size:12px;margin:6px 0 0 14px">' +
+      ((c.cambios || []).map(function(x){ return ctbEsc(x.nombre) + ': ' + x.antes + ' → ' + x.despues; }).join('<br>') || 'Sin diferencias') + '</div></details>';
+  }).join('');
+}
+function csLimpiar(){
+  if(csSucio && !confirm('¿Borrar todo lo que escribiste sin aplicar?')) return;
+  csValores = {}; csSucio = false; renderControlStock();
+}
+async function csAplicar(){
+  if(rolActual !== 'admin') return;
+  var r = csCalculo();
+  if(r.malos){ alert('Hay ' + r.malos + ' cantidad(es) con un número inválido. Corregilas (se marcan con "número?").'); return; }
+  if(!r.cambios.length && !r.iguales){ alert('No escribiste ninguna cantidad.'); return; }
+  var lineas = r.cambios.slice(0, 15).map(function(x){ return x.nombre + ': ' + x.antes + ' → ' + x.despues; }).join(String.fromCharCode(10));
+  var msg = r.cambios.length ? 'Se van a ajustar ' + r.cambios.length + ' producto(s):' + String.fromCharCode(10) + lineas + (r.cambios.length > 15 ? String.fromCharCode(10) + '... y ' + (r.cambios.length - 15) + ' más' : '') + String.fromCharCode(10) + String.fromCharCode(10) + '¿Aplicar el control?' : 'Todo lo que contaste coincide con el sistema. ¿Registrar el control igual?';
+  if(!confirm(msg)) return;
+  var ahora = new Date();
+  r.cambios.forEach(function(x){ db.productos[x.k].stock = x.despues; });
+  if(!db.controles_stock) db.controles_stock = [];
+  db.controles_stock.push({ fecha: ahora.toLocaleDateString('es-AR') + ' ' + ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }), usuario: (rolActual === 'admin' && !esSocioLogin) ? 'Admin' : (nombreUsuarioActual || ''), contados: r.cambios.length + r.iguales, cambios: r.cambios.map(function(x){ return { nombre: x.nombre, antes: x.antes, despues: x.despues }; }) });
+  if(db.controles_stock.length > 60) db.controles_stock = db.controles_stock.slice(-60);
+  registrarActividad('producto', 'Control de stock semanal', r.cambios.length + ' ajustes de ' + (r.cambios.length + r.iguales) + ' contados');
+  csValores = {}; csSucio = false;
+  var ok = await guardar();
+  renderControlStock();
+  if(typeof renderProductos === 'function') renderProductos();
+  renderDashboard();
+  if(!ok) alert('El control quedó SOLO en esta computadora: no se pudo guardar en el servidor. No cierres la página y probá de nuevo en unos segundos.');
+}
+
 // ---- CONTABILIDAD ----
 var CTB_MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 var ctbIniciado = false;
@@ -5019,7 +5180,7 @@ function renderActividad(){
 setInterval(async () => {
   if(!rolActual) return; // solo si está logueado
   if(guardandoEnServidor) return; // no interferir si se está guardando
-  if(planillaSucia || listasSucia || pgSucia) return; // no pisar una planilla de costos con cambios sin guardar
+  if(planillaSucia || listasSucia || pgSucia || csSucio) return; // no pisar una planilla de costos con cambios sin guardar
   await cargarDesdeServidor();
   try {
     const secActiva = document.querySelector('.section.active')?.id;

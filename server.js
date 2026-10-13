@@ -3533,6 +3533,41 @@ function unirDeudaAnterior(idx){
   renderPresupuestos(); renderDeudores(); renderAfavor(); renderEntrega(); renderDashboard();
 }
 
+// ---- UNIR UNA BOLETA A LA ANTERIOR DEL MISMO CLIENTE (solo admin y Tute) ----
+function boletaAnteriorPara(p){
+  if(!p || !p.cliente) return null;
+  var c = db.presupuestos.filter(function(x){
+    return x !== p && x.cliente && x.cliente.nombre === p.cliente.nombre && x.estado === 'Pendiente' && x.numero < p.numero;
+  });
+  c.sort(function(a, b){ return b.numero - a.numero; });
+  return c[0] || null;
+}
+function unirABoletaAnterior(idx){
+  if(rolActual !== 'admin') return;
+  var p = db.presupuestos[idx]; if(!p) return;
+  var t = boletaAnteriorPara(p);
+  if(!t){ alert('Este cliente no tiene otra boleta anterior pendiente para unir.'); return; }
+  var NL = String.fromCharCode(10);
+  var msg = 'Se van a pasar los productos de la boleta #' + p.numero + ' a la boleta #' + t.numero + ' de ' + p.cliente.nombre + ' y la #' + p.numero + ' se elimina.' + NL + NL +
+    'Queda UNA sola boleta (#' + t.numero + '): su total pasa de $' + fmt(t.total) + ' a $' + fmt((t.subtotal || 0) + (p.subtotal || 0) + (t.deuda || 0)) + '.' + NL +
+    'La deuda anterior de la #' + p.numero + ' ($' + fmt(p.deuda || 0) + ') se descarta, porque esa deuda ya está en la #' + t.numero + '.' + NL +
+    'La #' + t.numero + ' vuelve a Pendiente de entrega hasta que la marques entregada.' + NL + NL + '¿Unir?';
+  if(!confirm(msg)) return;
+  t.lineas = (t.lineas || []).concat(p.lineas || []);
+  t.subtotal = (t.subtotal || 0) + (p.subtotal || 0);
+  t.total = t.subtotal + (t.deuda || 0);
+  t.pagos = (t.pagos || []).concat(p.pagos || []);
+  if(p.stock_aplicado || t.stock_aplicado) t.stock_aplicado = (t.stock_aplicado || []).concat(p.stock_aplicado || []);
+  if(p.obs) t.obs = (t.obs ? t.obs + ' | ' : '') + p.obs;
+  t.impreso = true; if(!t.fecha_impresion) t.fecha_impresion = new Date().toISOString();
+  t.entregado = false; delete t.fecha_entrega;
+  var i = db.presupuestos.indexOf(p);
+  if(i > -1) db.presupuestos.splice(i, 1);
+  registrarActividad('presupuesto', 'Unió la boleta #' + p.numero + ' a la #' + t.numero, 'Cliente: ' + p.cliente.nombre + ' | Total nuevo: $' + fmt(t.total));
+  guardar();
+  renderPresupuestos(); renderDeudores(); renderAfavor(); renderEntrega(); renderDashboard();
+}
+
 // ---- MARCAR VARIAS BOLETAS COMO ENTREGADAS (solo admin y Tute) ----
 function masivaBoletas(){
   var q=(document.getElementById('masiva-buscar').value||'').toLowerCase().trim();
@@ -3616,6 +3651,7 @@ function renderEntrega(){
       '<td>'+imp+'</td>'+
       '<td style="white-space:nowrap">'+
       (rolActual==='admin'?'<button class="btn btn-sm" onclick="editarPresupuesto('+i+')" title="Editar boleta">✏️</button> ':'')+
+      ((rolActual==='admin'&&boletaAnteriorPara(p))?'<button class="btn btn-sm" onclick="unirABoletaAnterior('+i+')" title="Pasa los productos de esta boleta a la anterior del mismo cliente y queda una sola">🧩 Unir a la #'+boletaAnteriorPara(p).numero+'</button> ':'')+
       ((rolActual==='admin'&&(p.deuda||0)>0.01&&candidatosTraspaso(p).length)?'<button class="btn btn-sm" onclick="unirDeudaAnterior('+i+')" title="Esta boleta ya trae la deuda anterior: da por traspasadas las boletas viejas del cliente">🔗 Unir deuda anterior</button> ':'')+
       '<button class="btn btn-sm btn-primary" onclick="abrirEntrega('+i+')" title="Cargás cuánto pagó; si falta, pasa a Deudores; si pagó de más, queda a favor">📦 Entregado (cargar pago)</button> '+
       '</td></tr>';

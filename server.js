@@ -3049,8 +3049,10 @@ function guardarPresupuesto(){
     validez:'', cliente:cliente?{...cliente}:null,
     obs:document.getElementById('pres-obs').value.trim(), lineas, subtotal, deuda, total:subtotal+deuda, estado:'Pendiente' });
   var rStock = descontarStockBoleta(db.presupuestos[0]);
+  var rTr = traspasarDeudaAnterior(db.presupuestos[0]);
   registrarActividad('presupuesto',\`Creó boleta #\${num}\`,\`Cliente: \${cliente?.nombre||'Consumidor final'} | Total: $\${fmt(subtotal+deuda)}\`);
-  guardar(); cerrarModales(); renderPresupuestos(); renderDashboard(); if(typeof renderProductos === 'function') renderProductos(); avisoStock(rStock);
+  guardar(); cerrarModales(); renderPresupuestos(); renderDashboard(); try{ renderDeudores(); renderAfavor(); renderEntrega(); }catch(e){} if(typeof renderProductos === 'function') renderProductos(); avisoStock(rStock);
+  if(!rTr.hecho && rTr.cuantas && (deuda||0) > 0) alert('La deuda anterior de esta boleta ($' + fmt(deuda) + ') no coincide con lo que debía el cliente en las boletas anteriores ($' + fmt(rTr.suma) + '), así que no se unieron solas y esa deuda puede figurar dos veces. Si corresponde, unilas con el botón 🔗 en Pendiente de entrega o en Deudores.');
 }
 function registrarActividad(tipo, accion, detalle){
   if(!db.actividad) db.actividad=[];
@@ -3482,6 +3484,55 @@ async function guardarConfig(){
   const ok=document.getElementById('cfg-ok'); ok.style.display='inline'; setTimeout(()=>ok.style.display='none',2500);
 }
 
+// ---- DEUDA ANTERIOR TRASPASADA A LA BOLETA NUEVA ----
+// Cuando una boleta nueva arrastra la "deuda anterior" del cliente, las boletas viejas
+// quedan saldadas por traspaso para que la deuda no figure dos veces.
+function candidatosTraspaso(nueva){
+  if(!nueva || !nueva.cliente) return [];
+  var mias = db.presupuestos.filter(function(p){
+    if(p === nueva || !p.cliente || p.cliente.nombre !== nueva.cliente.nombre) return false;
+    if(p.estado === 'Rechazado' || p.estado === 'Vencido') return false;
+    return p.numero < nueva.numero;
+  });
+  // igual que al armar la boleta: si hay deuda se arrastra la deuda; si no, el saldo a favor
+  var deudas = mias.filter(function(p){ return p.estado === 'Pendiente' && saldoPendienteBoleta(p) > 0.01; });
+  if(deudas.length) return deudas;
+  return mias.filter(function(p){ return saldoPendienteBoleta(p) < -0.01; });
+}
+function traspasarDeudaAnterior(nueva, forzar){
+  var olds = candidatosTraspaso(nueva);
+  if(!olds.length) return { hecho: false, cuantas: 0 };
+  var suma = olds.reduce(function(a, p){ return a + saldoPendienteBoleta(p); }, 0);
+  var deuda = nueva.deuda || 0;
+  if(!forzar && Math.abs(suma - deuda) > 1) return { hecho: false, cuantas: olds.length, suma: suma, deuda: deuda };
+  var hoy = new Date().toLocaleDateString('es-AR');
+  olds.forEach(function(p){
+    var sd = saldoPendienteBoleta(p);
+    if(!p.pagos) p.pagos = [];
+    p.pagos.push({ fecha: hoy, monto: Math.round(sd * 100) / 100, forma: 'Traspaso', nota: 'Traspasado a la boleta #' + nueva.numero, traspaso: true });
+    p.estado = 'Aprobado';
+    p.traspasada_a = nueva.numero;
+  });
+  registrarActividad('presupuesto', 'Deuda anterior traspasada a boleta #' + nueva.numero, 'Boletas saldadas por traspaso: ' + olds.map(function(p){ return '#' + p.numero; }).join(', ') + ' | Cliente: ' + nueva.cliente.nombre);
+  return { hecho: true, cuantas: olds.length, suma: suma, deuda: deuda };
+}
+function unirDeudaAnterior(idx){
+  if(rolActual !== 'admin') return;
+  var p = db.presupuestos[idx]; if(!p) return;
+  var olds = candidatosTraspaso(p);
+  if(!olds.length){ alert('No hay boletas anteriores de este cliente para unir.'); return; }
+  var suma = olds.reduce(function(a, x){ return a + saldoPendienteBoleta(x); }, 0);
+  var NL = String.fromCharCode(10);
+  var msg = 'La boleta #' + p.numero + ' ya trae una deuda anterior de $' + fmt(p.deuda || 0) + '.' + NL + NL + 'Boletas anteriores de ' + p.cliente.nombre + ' que quedan dadas por traspasadas (su saldo pasa a esta boleta):' + NL +
+    olds.map(function(x){ return '#' + x.numero + ': ' + (saldoPendienteBoleta(x) > 0 ? 'debe $' : 'a favor $') + fmt(Math.abs(saldoPendienteBoleta(x))); }).join(NL) + NL + NL + 'Suma: $' + fmt(suma);
+  if(Math.abs(suma - (p.deuda || 0)) > 1) msg += NL + NL + 'OJO: la suma no coincide con la deuda anterior de esta boleta ($' + fmt(p.deuda || 0) + '). Revisalo antes de seguir.';
+  msg += NL + NL + '¿Unir?';
+  if(!confirm(msg)) return;
+  traspasarDeudaAnterior(p, true);
+  guardar();
+  renderPresupuestos(); renderDeudores(); renderAfavor(); renderEntrega(); renderDashboard();
+}
+
 // ---- MARCAR VARIAS BOLETAS COMO ENTREGADAS (solo admin y Tute) ----
 function masivaBoletas(){
   var q=(document.getElementById('masiva-buscar').value||'').toLowerCase().trim();
@@ -3565,6 +3616,7 @@ function renderEntrega(){
       '<td>'+imp+'</td>'+
       '<td style="white-space:nowrap">'+
       (rolActual==='admin'?'<button class="btn btn-sm" onclick="editarPresupuesto('+i+')" title="Editar boleta">✏️</button> ':'')+
+      ((rolActual==='admin'&&(p.deuda||0)>0.01&&candidatosTraspaso(p).length)?'<button class="btn btn-sm" onclick="unirDeudaAnterior('+i+')" title="Esta boleta ya trae la deuda anterior: da por traspasadas las boletas viejas del cliente">🔗 Unir deuda anterior</button> ':'')+
       '<button class="btn btn-sm btn-primary" onclick="abrirEntrega('+i+')" title="Cargás cuánto pagó; si falta, pasa a Deudores; si pagó de más, queda a favor">📦 Entregado (cargar pago)</button> '+
       '</td></tr>';
   }).join('');
@@ -3650,6 +3702,7 @@ function renderDeudores(){
         <button class="btn btn-sm btn-primary" onclick="abrirModalPago(\${realIdx})">💲 Pago</button>
         <button class="btn btn-sm btn-green" onclick="cobrarPresupuesto(\${realIdx})">✅ Total</button>
         \${rolActual==='admin'?\`<button class="btn btn-sm" onclick="editarPresupuesto(\${realIdx})" title="Editar boleta">✏️</button>\`:''}
+        \${(rolActual==='admin'&&(p.deuda||0)>0.01&&candidatosTraspaso(p).length)?'<button class="btn btn-sm" onclick="unirDeudaAnterior('+realIdx+')" title="Esta boleta ya trae la deuda anterior: da por traspasadas las boletas viejas del cliente">🔗 Unir deuda</button>':''}
         <button class="btn btn-sm" onclick="imprimirPresupuesto(\${realIdx})">🖨️</button>
       </td>
     </tr>\`;

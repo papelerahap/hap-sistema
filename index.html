@@ -3835,9 +3835,9 @@ function abrirModalPago(idx){
   const hist=document.getElementById('historial-pagos');
   if(p.pagos&&p.pagos.length){
     hist.innerHTML=`<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px">Pagos anteriores:</div>`+
-      p.pagos.map(pg=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border)">
+      p.pagos.map((pg,j)=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border)">
         <span style="color:var(--text2)">${pg.fecha} — ${pg.forma}${pg.nota?' ('+pg.nota+')':''}</span>
-        <strong style="color:var(--green)">$${fmt(pg.monto)}</strong>
+        <span><strong style="color:var(--green)">$${fmt(pg.monto)}</strong>${rolActual==='admin'?' <button class="btn btn-sm btn-danger" onclick="eliminarPago('+idx+','+j+')" title="Borra este pago (por si se cargó dos veces)">🗑️</button>':''}</span>
       </div>`).join('');
   } else { hist.innerHTML=''; }
   document.getElementById('modal-pago').classList.add('open');
@@ -3875,7 +3875,9 @@ function confirmarPago(){
   const monto=parseFloat(document.getElementById('pago-monto').value)||0;
   if(pagoEntrega&&!monto){ pagoEntrega=false; cerrarModales(); marcarEntregado(pagoIdx); return; }
   if(!monto||monto<=0){alert('Ingresá un monto mayor a cero');return;}
+  if(pagoIdx===null||pagoIdx===undefined) return;
   const p=db.presupuestos[pagoIdx];
+  if(!p) return;
   const saldo=saldoDeuda(p);
   if(!p.pagos)p.pagos=[];
   const forma=document.getElementById('pago-forma').value;
@@ -3894,7 +3896,25 @@ function confirmarPago(){
     monto
   });
   if(pagoEntrega){ pagoEntrega=false; p.entregado=true; p.fecha_entrega=new Date().toISOString(); registrarActividad('presupuesto','Entregó boleta #'+p.numero,'Cliente: '+(p.cliente?p.cliente.nombre:'Consumidor final')); }
+  pagoIdx=null;
   guardar(); cerrarModales(); renderDeudores(); renderAfavor(); renderDashboard(); renderPresupuestos(); try{ renderEntrega(); }catch(e){}
+}
+function eliminarPago(idx,j){
+  if(rolActual!=='admin') return;
+  var p=db.presupuestos[idx]; if(!p||!p.pagos||!p.pagos[j]) return;
+  var pg=p.pagos[j];
+  if(!confirm('¿Borrar el pago de $'+fmt(pg.monto)+' ('+pg.forma+', '+pg.fecha+') de la boleta #'+p.numero+'? También se saca de la Caja.')) return;
+  p.pagos.splice(j,1);
+  if(!pg.traspaso && db.caja){
+    for(var k=db.caja.length-1;k>=0;k--){
+      var c=db.caja[k];
+      if(c.tipo==='entrada' && Math.abs((c.monto||0)-pg.monto)<0.01 && c.medio===pg.forma && String(c.desc||'').indexOf('boleta #'+p.numero)>-1){ db.caja.splice(k,1); break; }
+    }
+  }
+  if(saldoPendienteBoleta(p)>0.01 && p.estado==='Aprobado') p.estado='Pendiente';
+  registrarActividad('eliminacion','Borró pago de boleta #'+p.numero,'Cliente: '+(p.cliente?p.cliente.nombre:'Consumidor final')+' | Monto: $'+fmt(pg.monto)+' | Forma: '+pg.forma);
+  guardar(); renderDeudores(); renderAfavor(); renderDashboard(); renderPresupuestos(); try{ renderEntrega(); }catch(e){}
+  abrirModalPago(idx);
 }
 
 var cobroIdx=null, cobroCb=null;
@@ -3912,13 +3932,15 @@ function cobroFormaCambio(){
   document.getElementById('cobro-mixto').style.display=(document.getElementById('cobro-forma').value==='Efectivo + Transferencia')?'block':'none';
 }
 function confirmarCobroTotal(){
-  var idx=cobroIdx; var p=db.presupuestos[idx]; if(!p) return;
+  var idx=cobroIdx; if(idx===null||idx===undefined) return;
+  var p=db.presupuestos[idx]; if(!p) return;
+  cobroIdx=null;
   var saldo=saldoDeuda(p);
   var forma=document.getElementById('cobro-forma').value;
   var partes=[];
   if(forma==='Efectivo + Transferencia'){
     var ef=parseFloat(document.getElementById('cobro-efvo').value)||0;
-    if(ef<=0||ef>=saldo){ alert('Escribí cuánto pagó en efectivo (menos que el total). El resto se toma como transferencia.'); return; }
+    if(ef<=0||ef>=saldo){ alert('Escribí cuánto pagó en efectivo (menos que el total). El resto se toma como transferencia.'); cobroIdx=idx; return; }
     partes=[{forma:'Efectivo',monto:ef},{forma:'Transferencia',monto:Math.round((saldo-ef)*100)/100}];
   } else if(saldo>0){
     partes=[{forma:forma,monto:saldo}];
@@ -4006,7 +4028,7 @@ function renderAfavor(){
       <td>$${fmt(p.total)}</td>
       <td style="color:var(--green)">$${fmt(pagado)}</td>
       <td><strong style="color:var(--green);font-size:15px">$${fmt(favor)}</strong></td>
-      <td><span class="badge badge-ok">A favor</span></td>
+      <td><span class="badge badge-ok">A favor</span>${rolActual==='admin'?' <button class="btn btn-sm" onclick="abrirModalPago('+db.presupuestos.indexOf(p)+')" title="Ver los pagos de esta boleta (y borrar uno repetido)">💳 Pagos</button>':''}</td>
     </tr>`;
   }).join('');
 }

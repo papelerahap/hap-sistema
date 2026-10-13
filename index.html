@@ -3690,9 +3690,33 @@ function renderEntrega(){
       (rolActual==='admin'?'<button class="btn btn-sm" onclick="editarPresupuesto('+i+')" title="Editar boleta">✏️</button> ':'')+
       ((rolActual==='admin'&&boletaAnteriorPara(p))?'<button class="btn btn-sm" onclick="unirABoletaAnterior('+i+')" title="Pasa los productos de esta boleta a la anterior del mismo cliente y queda una sola">🧩 Unir a la #'+boletaAnteriorPara(p).numero+'</button> ':'')+
       ((rolActual==='admin'&&(p.deuda||0)>0.01&&candidatosTraspaso(p).length)?'<button class="btn btn-sm" onclick="unirDeudaAnterior('+i+')" title="Esta boleta ya trae la deuda anterior: da por traspasadas las boletas viejas del cliente">🔗 Unir deuda anterior</button> ':'')+
+      (rolActual==='admin'?'<button class="btn btn-sm btn-danger" onclick="cancelarPedido('+i+')" title="Cancela el pedido: devuelve el stock y lo saca de la lista">❌ Cancelar pedido</button> ':'')+
       '<button class="btn btn-sm btn-primary" onclick="abrirEntrega('+i+')" title="Cargás cuánto pagó; si falta, pasa a Deudores; si pagó de más, queda a favor">📦 Entregado (cargar pago)</button> '+
       '</td></tr>';
   }).join('');
+}
+function cancelarPedido(idx){
+  if(rolActual !== 'admin') return;
+  var p = db.presupuestos[idx]; if(!p) return;
+  var NL = String.fromCharCode(10);
+  var reales = (p.pagos || []).filter(function(x){ return !x.traspaso; });
+  var pagado = reales.reduce(function(a, x){ return a + x.monto; }, 0);
+  var viejas = db.presupuestos.filter(function(x){ return x.traspasada_a === p.numero; });
+  var msg = '¿Cancelar el pedido #' + p.numero + ' de ' + (p.cliente ? p.cliente.nombre : 'Consumidor final') + ' por $' + fmt(p.total) + '?' + NL + NL + 'Se devuelve el stock y la boleta sale de Pendiente de entrega y de Deudores.';
+  if(viejas.length) msg += NL + 'Las boletas viejas que se habían unido a esta (' + viejas.map(function(x){ return '#' + x.numero; }).join(', ') + ') vuelven a figurar como deuda.';
+  if(pagado > 0.01) msg += NL + NL + 'OJO: tiene pagos cargados por $' + fmt(pagado) + '. Esos movimientos quedan en la Caja: revisalos y devolvé la plata si corresponde.';
+  if(!confirm(msg)) return;
+  viejas.forEach(function(x){
+    x.pagos = (x.pagos || []).filter(function(g){ return !(g.traspaso && g.nota === 'Traspasado a la boleta #' + p.numero); });
+    delete x.traspasada_a;
+    if(saldoPendienteBoleta(x) > 0.01) x.estado = 'Pendiente';
+  });
+  if(p.stock_aplicado) devolverStockBoleta(p);
+  p.estado = 'Rechazado';
+  p.cancelada = true; p.fecha_cancelacion = new Date().toISOString();
+  registrarActividad('eliminacion', 'Canceló pedido #' + p.numero, 'Cliente: ' + (p.cliente ? p.cliente.nombre : 'Consumidor final') + ' | Total: $' + fmt(p.total));
+  guardar();
+  try{ renderEntrega(); renderDeudores(); renderAfavor(); renderPresupuestos(); renderDashboard(); if(typeof renderProductos === 'function') renderProductos(); }catch(e){}
 }
 function entregarPagado(idx){
   var p=db.presupuestos[idx]; if(!p) return;

@@ -2026,8 +2026,14 @@ function guardarCliente(){
     tel:document.getElementById('c-tel').value.trim(), email:document.getElementById('c-email').value.trim(),
     dir:document.getElementById('c-dir').value.trim(), notas:document.getElementById('c-notas').value.trim(),
     lista_precio: document.getElementById('c-lista').value };
-  if(editClienteIdx !== null) db.clientes[editClienteIdx] = datos;
-  else db.clientes.push(datos);
+  if(editClienteIdx !== null){
+    var viejo = db.clientes[editClienteIdx];
+    // las boletas guardan una copia del codigo del cliente: se actualiza para que el cambio de grupo (G, L, E...) valga tambien en lo ya cargado
+    if(viejo && (viejo.codigo || '') !== datos.codigo){
+      (db.presupuestos || []).forEach(function(p){ if(p.cliente && p.cliente.nombre === viejo.nombre) p.cliente.codigo = datos.codigo; });
+    }
+    db.clientes[editClienteIdx] = datos;
+  } else db.clientes.push(datos);
   guardar(); cerrarModales(); renderClientes(); renderDashboard();
 }
 function eliminarCliente(idx){if(!confirm('¿Eliminar?'))return; db.clientes.splice(idx,1); guardar(); renderClientes(); renderDashboard();}

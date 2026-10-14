@@ -725,8 +725,14 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
 
     <!-- CONTROL DE STOCK -->
     <div id="controlstock" class="section">
+      <div class="section-header"><h2>Control de stock 📋</h2></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <button class="filtro-btn active" id="cs-tab-semanal" onclick="csVista('semanal')">📋 Control de stock semanal</button>
+        <button class="filtro-btn" id="cs-tab-guardado" onclick="csVista('guardado')">📦 Stock guardado</button>
+      </div>
+      <div id="cs-vista-semanal">
       <div class="section-header">
-        <h2>Control de stock semanal 📋</h2>
+        <h3 style="font-size:15px;margin:0">Control semanal</h3>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn" onclick="csLimpiar()">Borrar lo escrito</button>
           <button class="btn btn-green" onclick="csAplicar()">✅ Aplicar control</button>
@@ -745,6 +751,23 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
         <tbody id="cs-tabla"></tbody></table>
       </div>
       <div class="card"><div class="card-body"><h3 style="font-size:14px;margin-bottom:8px">Últimos controles</h3><div id="cs-historial"></div></div></div>
+      </div>
+      <div id="cs-vista-guardado" style="display:none">
+        <div class="section-header">
+          <h3 style="font-size:15px;margin:0">Stock guardado (reserva)</h3>
+          <button class="btn btn-green" onclick="cgGuardar()">💾 Guardar cambios</button>
+        </div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Es la mercadería que tenés guardada y no se mueve: no se cuenta en el control semanal ni se descuenta con las ventas. Podés escribir la cantidad directo, o pasar una parte del stock al guardado y volver a pasarla al stock cuando la necesites.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+          <input type="search" id="cg-buscar" placeholder="🔍 Buscar producto..." oninput="renderGuardado()" style="flex:1;min-width:200px;max-width:340px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px">
+          <label style="font-size:13px"><input type="checkbox" id="cg-todos" onchange="renderGuardado()"> Mostrar también los que no tienen guardado</label>
+          <span id="cg-resumen" style="font-size:12px;color:var(--text3)"></span>
+        </div>
+        <div class="card">
+          <table><thead><tr><th>Producto</th><th style="text-align:right">En el sistema (se cuenta)</th><th style="text-align:right">Guardado</th><th>Pasar de uno a otro</th></tr></thead>
+          <tbody id="cg-tabla"></tbody></table>
+        </div>
+      </div>
     </div>
 
     <!-- CONTABILIDAD -->
@@ -4802,6 +4825,84 @@ function mostrarGanancia(idx){
 var csValores = {};      // lo que se fue escribiendo: { indiceProducto: 'texto' }
 var csSucio = false;
 function csNum(v){ var n = listasNum(String(v == null ? '' : v)); return n; }
+var csVistaActual = 'semanal';
+var cgValores = {}, cgSucio = false;
+function csVista(v){
+  csVistaActual = v;
+  document.getElementById('cs-vista-semanal').style.display = v === 'semanal' ? '' : 'none';
+  document.getElementById('cs-vista-guardado').style.display = v === 'guardado' ? '' : 'none';
+  document.getElementById('cs-tab-semanal').classList.toggle('active', v === 'semanal');
+  document.getElementById('cs-tab-guardado').classList.toggle('active', v === 'guardado');
+  if(v === 'guardado') renderGuardado(); else renderControlStock();
+}
+function renderGuardado(){
+  if(rolActual !== 'admin') return;
+  var q = (document.getElementById('cg-buscar').value || '').toLowerCase().trim();
+  var todos = document.getElementById('cg-todos').checked;
+  var h = '', n = 0, valor = 0, sinCosto = 0, ks = [];
+  db.productos.forEach(function(p, k){
+    var t = ((p.nombre || '') + ' ' + (p.medida || '') + ' ' + (p.codigo || '')).toLowerCase();
+    if(q && !q.split(' ').every(function(w){ return t.indexOf(w) > -1; })) return;
+    var tiene = (p.guardado || 0) > 0 || cgValores[k] !== undefined;
+    if(!tiene && !(todos || q)) return;
+    ks.push(k);
+  });
+  ks.sort(function(a, b){ return (db.productos[a].nombre || '').localeCompare(db.productos[b].nombre || '', 'es'); });
+  ks.forEach(function(k){
+    var p = db.productos[k], v = cgValores[k] === undefined ? ((p.guardado || 0) > 0 ? p.guardado : '') : cgValores[k];
+    h += '<tr><td><strong>' + ctbEsc(p.nombre) + '</strong>' + (p.medida ? '<div style="font-size:11px;color:var(--text3)">' + ctbEsc(p.medida) + '</div>' : '') + '</td>' +
+      '<td style="text-align:right;font-weight:600">' + (p.stock || 0) + ' <span style="font-size:11px;color:var(--text3);font-weight:400">' + ctbEsc(p.unidad || '') + '</span></td>' +
+      '<td style="text-align:right"><input type="text" inputmode="decimal" class="inp cg-in" data-k="' + k + '" value="' + ctbEsc(v) + '" placeholder="0" style="width:90px;text-align:right" oninput="cgCambio(this)"></td>' +
+      '<td style="white-space:nowrap"><button class="btn btn-sm" title="Pasa una parte del stock al guardado" onclick="cgMover(' + k + ',1)">Al guardado →</button> <button class="btn btn-sm" title="Vuelve una parte del guardado al stock" onclick="cgMover(' + k + ',0)">← Al stock</button></td></tr>';
+  });
+  db.productos.forEach(function(p){
+    if((p.guardado || 0) > 0){ n++; if(p.costo > 0) valor += p.guardado * p.costo; else sinCosto++; }
+  });
+  document.getElementById('cg-tabla').innerHTML = h || '<tr class="empty-row"><td colspan="4">No hay productos con stock guardado. Marcá "Mostrar también los que no tienen guardado" para cargar uno.</td></tr>';
+  document.getElementById('cg-resumen').textContent = n + ' producto' + (n !== 1 ? 's' : '') + ' guardado' + (n !== 1 ? 's' : '') + ' · valor al costo ' + ctbMoney(valor) + (sinCosto ? ' (' + sinCosto + ' sin costo cargado)' : '');
+}
+function cgCambio(inp){
+  cgValores[inp.getAttribute('data-k')] = inp.value;
+  cgSucio = true;
+}
+async function cgGuardar(){
+  if(rolActual !== 'admin') return;
+  var ks = Object.keys(cgValores), cambios = [];
+  for(var i = 0; i < ks.length; i++){
+    var k = ks[i], p = db.productos[k]; if(!p) continue;
+    var txt = cgValores[k], n = (txt === '' ? 0 : csNum(txt));
+    if(n === null || n < 0){ alert('Cantidad inválida en "' + p.nombre + '". Corregila antes de guardar.'); return; }
+    if(Math.abs(n - (p.guardado || 0)) > 0.0005) cambios.push({ k: k, nombre: p.nombre, antes: p.guardado || 0, despues: n });
+  }
+  if(!cambios.length){ alert('No hay cambios para guardar.'); return; }
+  cambios.forEach(function(x){ db.productos[x.k].guardado = x.despues; });
+  registrarActividad('producto', 'Stock guardado', cambios.map(function(x){ return x.nombre + ': ' + x.antes + ' → ' + x.despues; }).join(' | '));
+  cgValores = {}; cgSucio = false;
+  var ok = await guardar();
+  renderGuardado();
+  if(typeof renderProductos === 'function') renderProductos();
+  renderDashboard();
+  if(!ok) alert('Los cambios quedaron SOLO en esta computadora: no se pudieron guardar en el servidor. No cierres la página y probá de nuevo.');
+}
+async function cgMover(k, haciaGuardado){
+  if(rolActual !== 'admin') return;
+  var p = db.productos[k]; if(!p) return;
+  var disp = haciaGuardado ? (p.stock || 0) : (p.guardado || 0);
+  var txt = prompt((haciaGuardado ? 'Pasar al guardado' : 'Volver al stock') + ' — ' + p.nombre + String.fromCharCode(10) + 'Disponible: ' + disp + String.fromCharCode(10) + '¿Cuántos?');
+  if(txt === null || txt === '') return;
+  var n = csNum(txt);
+  if(n === null || n <= 0){ alert('Escribí una cantidad mayor a cero.'); return; }
+  if(n > disp + 0.0005){ alert('No hay tanto: solo tenés ' + disp + '.'); return; }
+  if(haciaGuardado){ p.stock = Math.round(((p.stock || 0) - n) * 1000) / 1000; p.guardado = Math.round(((p.guardado || 0) + n) * 1000) / 1000; }
+  else { p.guardado = Math.round(((p.guardado || 0) - n) * 1000) / 1000; p.stock = Math.round(((p.stock || 0) + n) * 1000) / 1000; }
+  delete cgValores[k];
+  registrarActividad('producto', haciaGuardado ? 'Pasó al stock guardado' : 'Volvió al stock', p.nombre + ': ' + n);
+  var ok = await guardar();
+  renderGuardado();
+  if(typeof renderProductos === 'function') renderProductos();
+  renderDashboard();
+  if(!ok) alert('El cambio quedó SOLO en esta computadora: no se pudo guardar en el servidor. No cierres la página y probá de nuevo.');
+}
 function iniciarControlStock(){
   if(!db.controles_stock) db.controles_stock = [];
   var cats = {};
@@ -4810,6 +4911,7 @@ function iniciarControlStock(){
   sel.innerHTML = '<option value="">Todas las categorías</option>' + Object.keys(cats).sort(function(a, b){ return a.localeCompare(b, 'es'); }).map(function(c){ return '<option>' + ctbEsc(c) + '</option>'; }).join('');
   sel.value = actual;
   renderControlStock();
+  if(csVistaActual === 'guardado') renderGuardado();
 }
 function csVisibles(){
   var q = (document.getElementById('cs-buscar').value || '').toLowerCase().trim();
@@ -5350,7 +5452,7 @@ function renderActividad(){
 setInterval(async () => {
   if(!rolActual) return; // solo si está logueado
   if(guardandoEnServidor) return; // no interferir si se está guardando
-  if(planillaSucia || listasSucia || pgSucia || csSucio) return; // no pisar una planilla de costos con cambios sin guardar
+  if(planillaSucia || listasSucia || pgSucia || csSucio || cgSucio) return; // no pisar una planilla de costos con cambios sin guardar
   await cargarDesdeServidor();
   try {
     const secActiva = document.querySelector('.section.active')?.id;

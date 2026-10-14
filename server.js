@@ -1235,6 +1235,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
       <div class="form-group"><label>Nombre / Razón social *</label><input type="text" id="c-nombre"></div>
       <div class="form-group"><label>Código de cliente</label><input type="text" id="c-codigo" placeholder="Ej: G, A1, 001..."></div>
     </div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:12px"><input type="checkbox" id="c-fuera-resumen"> No incluir en el resumen de la oficina (paga al momento)</label>
     <div class="form-grid form-grid-2" style="margin-bottom:12px">
       <div class="form-group"><label>CUIT / DNI</label><input type="text" id="c-cuit"></div>
       <div class="form-group"><label>Condición IVA</label>
@@ -2009,6 +2010,7 @@ function abrirModalCliente(idx){
   document.getElementById('modal-cliente').classList.add('open');
   document.getElementById('titulo-modal-cliente').textContent = idx !== undefined ? 'Editar cliente' : 'Nuevo cliente';
   ['c-nombre','c-codigo','c-cuit','c-tel','c-email','c-dir','c-notas'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('c-fuera-resumen').checked = false;
   poblarSelectLista('c-lista', (idx !== undefined && db.clientes[idx]) ? (db.clientes[idx].lista_precio || 'General') : 'General');
   if(idx !== undefined){
     const c = db.clientes[idx];
@@ -2020,6 +2022,7 @@ function abrirModalCliente(idx){
     document.getElementById('c-email').value = c.email||'';
     document.getElementById('c-dir').value = c.dir||'';
     document.getElementById('c-notas').value = c.notas||'';
+    document.getElementById('c-fuera-resumen').checked = !!c.fuera_resumen;
   }
 }
 function guardarCliente(){
@@ -2029,7 +2032,7 @@ function guardarCliente(){
     cuit:document.getElementById('c-cuit').value.trim(), iva:document.getElementById('c-iva').value,
     tel:document.getElementById('c-tel').value.trim(), email:document.getElementById('c-email').value.trim(),
     dir:document.getElementById('c-dir').value.trim(), notas:document.getElementById('c-notas').value.trim(),
-    lista_precio: document.getElementById('c-lista').value };
+    lista_precio: document.getElementById('c-lista').value, fuera_resumen: document.getElementById('c-fuera-resumen').checked };
   if(editClienteIdx !== null){
     var viejo = db.clientes[editClienteIdx];
     // las boletas guardan una copia del codigo del cliente: se actualiza para que el cambio de grupo (G, L, E...) valga tambien en lo ya cargado
@@ -3179,6 +3182,7 @@ function calcularResumenOficina(lista){
   var porNombre={};
   db.clientes.forEach(function(c){
     var cod=(c.codigo||'').toUpperCase();
+    if(c.fuera_resumen) return;
     if(!(cod===cod0 || (!cod && c.lista_precio===lista))) return;
     var fila={nombre:c.nombre,boletas:0,total:0,debe:0,favor:0};
     g.filas.push(fila); porNombre[c.nombre]=fila;

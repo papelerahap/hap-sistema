@@ -3336,6 +3336,7 @@ function renderPresupuestos(){
       <td><strong>$\${fmt(p.total)}</strong></td>
       <td>\${p.estado==='Aprobado'?'<span class="badge badge-ok">Cobrada</span>':'<span class="badge badge-low">Pendiente</span>'}</td>
       <td style="white-space:nowrap">
+        \${(rolActual==='admin'&&(p.pagos||[]).length)?'<button class="btn btn-sm" onclick="abrirModalPago('+i+')" title="Ver los pagos de la boleta y cancelar uno">💳 Pagos</button> ':''}
         <button class="btn btn-sm" onclick="editarPresupuesto(\${i})">✏️ Editar</button>
         <button class="btn btn-sm btn-green" onclick="imprimirPresupuesto(\${i})">🖨️ Imprimir</button>
         <button class="btn btn-sm btn-danger" onclick="eliminarPresupuesto(\${i})">🗑️</button>

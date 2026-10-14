@@ -1035,7 +1035,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
   <div class="modal" style="max-width:720px;width:95%">
     <h3 id="resumen-titulo">Resumen de consumo</h3>
     <div id="resumen-periodo" style="font-size:13px;color:var(--text2);margin-bottom:10px"></div>
-    <div style="max-height:55vh;overflow:auto;margin-bottom:12px"><table style="width:100%"><thead><tr><th>Cliente</th><th style="text-align:right">Boletas</th><th style="text-align:right">Consumo</th><th style="text-align:right">Pagó</th><th style="text-align:right">A pagar (período)</th><th style="text-align:right">Cuenta total</th></tr></thead><tbody id="resumen-tabla"></tbody></table></div>
+    <div style="max-height:55vh;overflow:auto;margin-bottom:12px"><table style="width:100%"><thead><tr><th title="Tildá los que van en el resumen"></th><th>Cliente</th><th style="text-align:right">Boletas</th><th style="text-align:right">Consumo</th><th style="text-align:right">Pagó</th><th style="text-align:right">A pagar (período)</th><th style="text-align:right">Cuenta total</th></tr></thead><tbody id="resumen-tabla"></tbody></table></div>
     <div class="modal-footer">
       <button class="btn" onclick="cerrarModales()">Cerrar</button>
       <button class="btn btn-green" onclick="descargarResumenOficina()">⬇️ Descargar Excel</button>
@@ -3182,9 +3182,8 @@ function calcularResumenOficina(lista){
   var porNombre={};
   db.clientes.forEach(function(c){
     var cod=(c.codigo||'').toUpperCase();
-    if(c.fuera_resumen) return;
     if(!(cod===cod0 || (!cod && c.lista_precio===lista))) return;
-    var fila={nombre:c.nombre,boletas:0,total:0,pago:0,apagar:0,debe:0,favor:0};
+    var fila={nombre:c.nombre,incluir:!c.fuera_resumen,boletas:0,total:0,pago:0,apagar:0,debe:0,favor:0};
     g.filas.push(fila); porNombre[c.nombre]=fila;
   });
   db.presupuestos.forEach(function(p){
@@ -3200,9 +3199,24 @@ function calcularResumenOficina(lista){
     fila.pago+=Math.min(consumo,pagoReal); fila.apagar+=Math.max(0,consumo-pagoReal);
   });
   g.filas.sort(function(a,b){ return a.nombre.localeCompare(b.nombre,'es'); });
-  var tDebe=0,tFavor=0,tPago=0,tApagar=0;
-  g.filas.forEach(function(x){ tPago+=x.pago; tApagar+=x.apagar; g.total+=x.total; g.boletas+=x.boletas; x.neto=x.debe-x.favor; if(x.neto>0) tDebe+=x.neto; else if(x.neto<0) tFavor+=-x.neto; });
-  return {desde:desde,hasta:hasta,lista:lista,filas:g.filas,total:g.total,boletas:g.boletas,debe:tDebe,favor:tFavor,pago:tPago,apagar:tApagar};
+  g.filas.forEach(function(x){ x.neto=x.debe-x.favor; });
+  var r={desde:desde,hasta:hasta,lista:lista,filas:g.filas};
+  recalcResumen(r);
+  return r;
+}
+function recalcResumen(r){
+  var tDebe=0,tFavor=0,tPago=0,tApagar=0,tTotal=0,tBol=0,n=0;
+  r.filas.forEach(function(x){
+    if(!x.incluir) return;
+    n++; tPago+=x.pago; tApagar+=x.apagar; tTotal+=x.total; tBol+=x.boletas;
+    if(x.neto>0) tDebe+=x.neto; else if(x.neto<0) tFavor+=-x.neto;
+  });
+  r.total=tTotal; r.boletas=tBol; r.debe=tDebe; r.favor=tFavor; r.pago=tPago; r.apagar=tApagar; r.nIncluidos=n;
+}
+function resumenIncluir(i,chk){
+  var r=resumenOficinaDatos; if(!r||!r.filas[i]) return;
+  r.filas[i].incluir=!!chk;
+  recalcResumen(r); dibujarResumenOficina();
 }
 function cuentaTexto(neto,conSigno){
   if(neto>0.01) return 'Debe $'+fmt(neto);
@@ -3215,15 +3229,19 @@ function abrirResumenOficina(lista){
   if(rolActual!=='admin'){ alert('Solo el administrador puede ver este resumen.'); return; }
   if(!document.getElementById('res-desde').value||!document.getElementById('res-hasta').value){ alert('Elegí las fechas Desde y Hasta para armar el resumen.'); return; }
   var r=calcularResumenOficina(lista); resumenOficinaDatos=r;
+  dibujarResumenOficina();
+  document.getElementById('modal-resumen').classList.add('open');
+}
+function dibujarResumenOficina(){
+  var r=resumenOficinaDatos; if(!r) return; var lista=r.lista;
   document.getElementById('resumen-titulo').textContent='Resumen de consumo — '+lista;
   document.getElementById('resumen-periodo').textContent='Período: '+fmtFechaAR(r.desde)+' al '+fmtFechaAR(r.hasta)+' · Sin la deuda anterior de cada boleta';
   var h='';
-  r.filas.forEach(function(x){
-    h+='<tr><td>'+x.nombre+'</td><td style="text-align:right">'+x.boletas+'</td><td style="text-align:right">$'+fmt(x.total)+'</td><td style="text-align:right">$'+fmt(x.pago)+'</td><td style="text-align:right;font-weight:700">$'+fmt(x.apagar)+'</td><td style="text-align:right;font-weight:600;color:'+(x.neto>0.01?'var(--red)':(x.neto<-0.01?'var(--green)':'var(--text3)'))+'">'+cuentaTexto(x.neto)+'</td></tr>';
+  r.filas.forEach(function(x,i){
+    h+='<tr'+(x.incluir?'':' style="opacity:.4"')+'><td><input type="checkbox" '+(x.incluir?'checked ':'')+'onchange="resumenIncluir('+i+',this.checked)" title="Incluir en el resumen"></td><td>'+x.nombre+'</td><td style="text-align:right">'+x.boletas+'</td><td style="text-align:right">$'+fmt(x.total)+'</td><td style="text-align:right">$'+fmt(x.pago)+'</td><td style="text-align:right;font-weight:700">$'+fmt(x.apagar)+'</td><td style="text-align:right;font-weight:600;color:'+(x.neto>0.01?'var(--red)':(x.neto<-0.01?'var(--green)':'var(--text3)'))+'">'+cuentaTexto(x.neto)+'</td></tr>';
   });
-  h+='<tr style="background:var(--bg);font-weight:700;font-size:15px"><td>TOTAL '+lista.toUpperCase()+' ('+r.filas.length+' clientes)</td><td style="text-align:right">'+r.boletas+'</td><td style="text-align:right">$'+fmt(r.total)+'</td><td style="text-align:right">$'+fmt(r.pago)+'</td><td style="text-align:right">$'+fmt(r.apagar)+'</td><td style="text-align:right;font-size:12px">Debe $'+fmt(r.debe)+'<br>A favor $'+fmt(r.favor)+'</td></tr>';
+  h+='<tr style="background:var(--bg);font-weight:700;font-size:15px"><td></td><td>TOTAL '+lista.toUpperCase()+' ('+r.nIncluidos+' clientes)</td><td style="text-align:right">'+r.boletas+'</td><td style="text-align:right">$'+fmt(r.total)+'</td><td style="text-align:right">$'+fmt(r.pago)+'</td><td style="text-align:right">$'+fmt(r.apagar)+'</td><td style="text-align:right;font-size:12px">Debe $'+fmt(r.debe)+'<br>A favor $'+fmt(r.favor)+'</td></tr>';
   document.getElementById('resumen-tabla').innerHTML=h;
-  document.getElementById('modal-resumen').classList.add('open');
 }
 function descargarResumenOficina(){
   if(rolActual!=='admin') return;
@@ -3234,7 +3252,7 @@ function descargarResumenOficina(){
   var out=[];
   out.push([cel('Resumen de consumo '+r.lista),cel('Del '+fmtFechaAR(r.desde)+' al '+fmtFechaAR(r.hasta)),'','','','',''].join(';'));
   out.push([cel('Cliente'),cel('Boletas'),cel('Consumo'),cel('Pago'),cel('A pagar (periodo)'),cel('Cuenta total'),cel('Importe cuenta')].join(';'));
-  r.filas.forEach(function(x){ out.push([cel(x.nombre),x.boletas,num(x.total),num(x.pago),num(x.apagar),cel(x.neto>0.01?'Debe':(x.neto<-0.01?'A favor':'Al dia')),num(Math.abs(x.neto))].join(';')); });
+  r.filas.forEach(function(x){ if(!x.incluir) return; out.push([cel(x.nombre),x.boletas,num(x.total),num(x.pago),num(x.apagar),cel(x.neto>0.01?'Debe':(x.neto<-0.01?'A favor':'Al dia')),num(Math.abs(x.neto))].join(';')); });
   out.push([cel('TOTAL '+r.lista.toUpperCase()),r.boletas,num(r.total),num(r.pago),num(r.apagar),cel('Debe'),num(r.debe)].join(';'));
   out.push([cel('TOTAL A FAVOR'),'','','','',cel('A favor'),num(r.favor)].join(';'));
   var blob=new Blob([String.fromCharCode(0xFEFF)+out.join(NL)],{type:'text/csv;charset=utf-8'});

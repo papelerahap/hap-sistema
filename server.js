@@ -3397,9 +3397,9 @@ function imprimirPresupuesto(idx){
     const marca = esOriginal ? 'X' : '';
     const copiaLabel = esOriginal ? 'ORIGINAL' : 'DUPLICADO';
     const deudaRow = (p.deuda&&p.deuda!=0) ? \`
-      <div style="display:flex;justify-content:flex-end;font-size:13px;line-height:15px;margin-bottom:2px">
+      <div style="display:flex;justify-content:flex-end;font-size:14.5px;line-height:16px;margin-bottom:2px">
         <span style="font-weight:700;margin-right:8px">Deuda Anterior:</span>
-        <span style="min-width:80px;text-align:right;border-bottom:1px solid #aaa">$ \${fmt(p.deuda)}</span>
+        <span style="min-width:100px;text-align:right;border-bottom:1px solid #aaa">$ \${fmt(p.deuda)}</span>
       </div>\` : '';
     return \`<div class="presup-col">
       <div class="ph-copia-label">\${copiaLabel}</div>

@@ -1064,6 +1064,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
     <div class="modal-footer">
       <button class="btn" onclick="cerrarModales()">Cerrar</button>
       <button class="btn btn-green" onclick="descargarResumenOficina()">⬇️ Descargar Excel</button>
+      <button class="btn btn-green" onclick="imprimirResumenOficina()" title="Se abre la impresión: elegí Guardar como PDF">📄 PDF para enviar</button>
     </div>
   </div>
 </div>
@@ -3367,6 +3368,39 @@ function xlsxResumen(r){
     { nombre: 'xl/styles.xml', datos: estilos },
     { nombre: 'xl/worksheets/sheet1.xml', datos: hoja }
   ]);
+}
+// PDF para mandar a la oficina: abre la impresion con el cuadro y se elige "Guardar como PDF"
+function imprimirResumenOficina(){
+  if(rolActual!=='admin') return;
+  var r=resumenOficinaDatos; if(!r) return;
+  var cel='border:1px solid #bbb;padding:5px 8px;';
+  var h='<div style="font-family:Arial,sans-serif;color:#000">' +
+    '<div style="font-size:20px;font-weight:700">Resumen de consumo ' + ctbEsc(r.lista) + '</div>' +
+    '<div style="font-size:12px;margin:2px 0 12px">Del ' + fmtFechaAR(r.desde) + ' al ' + fmtFechaAR(r.hasta) + ' · Sin la deuda anterior de cada boleta</div>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#1F3864;color:#fff">' +
+    ['Cliente','Boletas','Consumo','Pagó','A pagar (período)','Cuenta','Importe cuenta'].map(function(x, i){ return '<th style="' + cel + 'background:#1F3864;color:#fff;text-transform:none;font-size:12px;text-align:' + (i === 0 ? 'left' : 'center') + '">' + x + '</th>'; }).join('') + '</tr></thead><tbody>';
+  r.filas.forEach(function(x){
+    if(!x.incluir) return;
+    var est = x.neto > 0.01 ? 'background:#FFC7CE;color:#9C0006;' : (x.neto < -0.01 ? 'background:#C6EFCE;color:#006100;' : '');
+    var txt = x.neto > 0.01 ? 'Debe' : (x.neto < -0.01 ? 'A favor' : 'Al día');
+    h += '<tr style="' + est + '"><td style="' + cel + '">' + ctbEsc(x.nombre) + '</td><td style="' + cel + 'text-align:right">' + x.boletas + '</td><td style="' + cel + 'text-align:right">$' + fmt(x.total) + '</td><td style="' + cel + 'text-align:right">$' + fmt(x.pago) + '</td><td style="' + cel + 'text-align:right">$' + fmt(x.apagar) + '</td><td style="' + cel + '">' + txt + '</td><td style="' + cel + 'text-align:right">$' + fmt(Math.abs(x.neto)) + '</td></tr>';
+  });
+  var tot = 'background:#D9D9D9;font-weight:700;';
+  h += '<tr style="' + tot + '"><td style="' + cel + '">TOTAL ' + ctbEsc(r.lista.toUpperCase()) + '</td><td style="' + cel + 'text-align:right">' + r.boletas + '</td><td style="' + cel + 'text-align:right">$' + fmt(r.total) + '</td><td style="' + cel + 'text-align:right">$' + fmt(r.pago) + '</td><td style="' + cel + 'text-align:right">$' + fmt(r.apagar) + '</td><td style="' + cel + '">Debe</td><td style="' + cel + 'text-align:right">$' + fmt(r.debe) + '</td></tr>' +
+    '<tr style="' + tot + '"><td style="' + cel + '">TOTAL A FAVOR</td><td style="' + cel + '"></td><td style="' + cel + '"></td><td style="' + cel + '"></td><td style="' + cel + '"></td><td style="' + cel + '">A favor</td><td style="' + cel + 'text-align:right">$' + fmt(r.favor) + '</td></tr>' +
+    '</tbody></table><div style="font-size:11px;margin-top:10px;color:#444">Rojo = debe · Verde = a favor · Sin color = al día</div></div>';
+  var st = document.createElement('style');
+  st.id = 'estilo-impresion-resumen';
+  st.textContent = '@media print{@page{size:A4 landscape;margin:10mm}.modal-backdrop{display:none!important}}';
+  document.head.appendChild(st);
+  document.getElementById('print-area').innerHTML = h;
+  var limpiar = function(){
+    if(st.parentNode) st.parentNode.removeChild(st);
+    document.getElementById('print-area').innerHTML = '';
+    window.removeEventListener('afterprint', limpiar);
+  };
+  window.addEventListener('afterprint', limpiar);
+  window.print();
 }
 function descargarResumenOficina(){
   if(rolActual!=='admin') return;

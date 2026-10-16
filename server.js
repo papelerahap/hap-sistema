@@ -484,6 +484,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
       <div class="section-header">
         <h2>Deudores 🔴</h2>
         <span id="deudores-total" style="font-size:13px;color:var(--red);font-weight:600"></span>
+        <button class="btn btn-sm" id="btn-agrupar" onclick="abrirAgrupar()" style="display:none" title="Junta las boletas de una semana de Gloria, Luis o Edgardo en un solo deudor">🗂️ Agrupar semana</button>
       </div>
       <div style="margin-bottom:10px"><input type="search" id="deudores-buscar" placeholder="🔍 Buscar por cliente, número de boleta o teléfono..." oninput="renderDeudores()" style="width:100%;max-width:420px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
@@ -1055,6 +1056,23 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
     </div>
   </div>
 </div>
+<div class="modal-backdrop" id="modal-agrupar">
+  <div class="modal" style="max-width:560px;width:95%">
+    <h3>Agrupar una semana como un solo deudor</h3>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Las boletas pendientes del grupo (por código G, L o E) en esas fechas pasan a figurar en Deudores como una sola línea. Cuando te pagan todo junto lo marcás una vez y quedan todas cobradas.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <select id="agr-grupo" onchange="agruparPreview()" style="padding:6px 10px"><option value="G">Gloria (G)</option><option value="L" selected>Luis (L)</option><option value="E">Edgardo (E)</option></select>
+      <label style="font-size:12px">Desde</label><input type="date" id="agr-desde" onchange="agruparPreview()" style="padding:6px 10px">
+      <label style="font-size:12px">Hasta</label><input type="date" id="agr-hasta" onchange="agruparPreview()" style="padding:6px 10px">
+    </div>
+    <div id="agr-resumen" style="font-size:13px;font-weight:600;margin-bottom:8px"></div>
+    <div style="max-height:40vh;overflow:auto;margin-bottom:12px"><table style="width:100%"><thead><tr><th>Cliente</th><th style="text-align:right">Boleta</th><th style="text-align:right">Debe</th></tr></thead><tbody id="agr-tabla"></tbody></table></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="cerrarModales()">Cancelar</button>
+      <button class="btn btn-green" onclick="confirmarAgrupar()">🗂️ Agrupar</button>
+    </div>
+  </div>
+</div>
 <!-- MODAL RESUMEN OFICINA -->
 <div class="modal-backdrop" id="modal-resumen">
   <div class="modal" style="max-width:720px;width:95%">
@@ -1612,6 +1630,7 @@ async function cargarDesdeServidor() {
       if(!db.listas_precio) db.listas_precio = {};
       if(!db.listas_margen) db.listas_margen = {};
       if(!db.controles_stock) db.controles_stock = [];
+      if(!db.cierres) db.cierres = [];
       ordenarDatos();
       localStorage.setItem('hap_db', JSON.stringify(db));
       console.log('✅ Datos del servidor cargados');
@@ -3903,6 +3922,7 @@ function renderDeudores(){
   const pendientes=db.presupuestos.filter(p=>{
     if(p.estado!=='Pendiente') return false;
     if(p.impreso&&!p.entregado) return false;
+    if(p.cierre&&cierreActivo(p.cierre)) return false;
     if(filtroCodDeudor==='') return true;
     const cod=(p.cliente?.codigo||'').toUpperCase();
     if(filtroCodDeudor==='SIN') return !cod;
@@ -3915,9 +3935,19 @@ function renderDeudores(){
     var txt=((p.cliente?p.cliente.nombre:'Consumidor final')+' '+p.numero+' '+(p.cliente&&p.cliente.tel?p.cliente.tel:'')+' '+(p.cliente&&p.cliente.codigo?p.cliente.codigo:'')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
     return q.split(' ').every(function(w){ return txt.indexOf(w)>-1; });
   });
-  const totalSaldo=pendientes.reduce((a,p)=>a+saldoPendienteBoleta(p),0);
+  var qG=(document.getElementById('deudores-buscar')||{value:''}).value.trim().toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'');
+  const grupos=(db.cierres||[]).filter(c=>{
+    if(c.pagado||cierreSaldo(c)<=0.01) return false;
+    if(filtroCodDeudor!==''&&filtroCodDeudor!==c.grupo) return false;
+    if(!qG) return true;
+    var tg=(c.nombre+' '+c.grupo).toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'');
+    return qG.split(' ').every(function(w){ return tg.indexOf(w)>-1; });
+  });
+  var bAg=document.getElementById('btn-agrupar'); if(bAg) bAg.style.display=(rolActual==='admin')?'':'none';
+  const nItems=pendientes.length+grupos.length;
+  const totalSaldo=pendientes.reduce((a,p)=>a+saldoPendienteBoleta(p),0)+grupos.reduce((a,c)=>a+cierreSaldo(c),0);
   document.getElementById('deudores-total').textContent=
-    pendientes.length?(rolActual==='admin'?\`\${pendientes.length} boleta\${pendientes.length>1?'s':''} — Saldo: $\${fmt(totalSaldo)}\`:\`\${pendientes.length} boleta\${pendientes.length>1?'s':''}\`):'Sin deudores en este filtro';
+    nItems?(rolActual==='admin'?\`\${nItems} deudor\${nItems>1?'es':''} — Saldo: $\${fmt(totalSaldo)}\`:\`\${nItems} deudor\${nItems>1?'es':''}\`):'Sin deudores en este filtro';
   // Mostrar a favor debajo
   const totalFavor = db.presupuestos.reduce((sum,p)=>sum+saldoAFavor(p),0);
   const resumenFavor = document.getElementById('afavor-resumen');
@@ -3927,10 +3957,31 @@ function renderDeudores(){
     else { resumenFavor.style.display='none'; }
   }
   const t=document.getElementById('tabla-deudores');
-  if(!pendientes.length){t.innerHTML='<tr class="empty-row"><td colspan="8">✅ Sin boletas pendientes en este filtro</td></tr>';return;}
+  if(!pendientes.length&&!grupos.length){t.innerHTML='<tr class="empty-row"><td colspan="8">✅ Sin boletas pendientes en este filtro</td></tr>';return;}
   const colores={'G':'#185FA5','L':'#3B6D11','E':'#854F0B','S':'#7B3FB0','C':'#A32D2D'};
   const lista=[...pendientes].sort((a,b)=>saldoPendienteBoleta(b)-saldoPendienteBoleta(a));
-  t.innerHTML=lista.map(p=>{
+  const filasGrupos=grupos.map(c=>{
+    const ms=cierreMiembros(c);
+    const tot=ms.reduce((a,p)=>a+(p.total||0),0);
+    const sal=cierreSaldo(c);
+    const pag=ms.reduce((a,p)=>a+(p.pagos||[]).reduce((s,pg)=>s+pg.monto,0),0);
+    const col=colores[c.grupo]||'var(--text3)';
+    return \`<tr style="background:var(--bg)">
+      <td><strong>🗂️</strong></td>
+      <td style="font-size:12px">\${cierreFechaCorta(c.hasta)}</td>
+      <td><strong style="color:var(--text)">\${ctbEsc(c.nombre)}</strong><span style="background:\${col};color:#fff;padding:1px 7px;border-radius:100px;font-size:11px;font-weight:700;margin-left:6px">\${c.grupo}</span><br><span style="font-size:11px;color:var(--text3)">\${ms.length} boleta\${ms.length!==1?'s':''} juntas</span></td>
+      <td><strong>$\${fmt(tot)}</strong></td>
+      <td style="color:var(--green)">\${pag>0?'$'+fmt(pag):'<span style="color:var(--text3)">—</span>'}</td>
+      <td><strong style="color:var(--red)">$\${fmt(sal)}</strong></td>
+      <td><span class="badge badge-low">Semana agrupada</span></td>
+      <td style="white-space:nowrap;display:flex;gap:4px;align-items:center">
+        \${rolActual==='admin'?'<button class="btn btn-sm btn-green" onclick="cobrarGrupo(\\''+c.id+'\\')">✅ Cobrar todo junto</button>':''}
+        <button class="btn btn-sm" onclick="verCierre('\${c.id}')">📋 Ver boletas</button>
+        \${rolActual==='admin'?'<button class="btn btn-sm" onclick="deshacerCierre(\\''+c.id+'\\')" title="Vuelve a mostrar las boletas una por una">↩️</button>':''}
+      </td>
+    </tr>\`;
+  }).join('');
+  t.innerHTML=filasGrupos+lista.map(p=>{
     const realIdx=db.presupuestos.indexOf(p);
     const pagado=(p.pagos||[]).reduce((s,pg)=>s+pg.monto,0);
     const saldo=saldoPendienteBoleta(p);
@@ -4074,9 +4125,138 @@ function eliminarPago(idx,j){
 }
 
 var cobroIdx=null, cobroCb=null;
+// ---- SEMANAS AGRUPADAS (Gloria / Luis / Edgardo): varias boletas figuran como un solo deudor ----
+var cobroGrupo = null;
+var CIERRE_GRUPOS = { G: 'Gloria', L: 'Luis', E: 'Edgardo' };
+function cierreActivo(id){
+  return (db.cierres || []).some(function(c){ return c.id === id && !c.pagado; });
+}
+function cierreMiembros(c){
+  return db.presupuestos.filter(function(p){ return p.cierre === c.id && p.estado === 'Pendiente' && saldoPendienteBoleta(p) > 0.01; });
+}
+function cierreSaldo(c){
+  return cierreMiembros(c).reduce(function(a, p){ return a + saldoPendienteBoleta(p); }, 0);
+}
+function cierreFechaCorta(iso){
+  var p = String(iso || '').split('-');
+  return p.length === 3 ? p[2] + '/' + p[1] : '';
+}
+function abrirAgrupar(){
+  if(rolActual !== 'admin') return;
+  var hoy = new Date(), lunes = new Date(hoy);
+  lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
+  var viernes = new Date(lunes); viernes.setDate(lunes.getDate() + 4);
+  document.getElementById('agr-desde').value = fechaISO(lunes);
+  document.getElementById('agr-hasta').value = fechaISO(viernes);
+  document.getElementById('agr-grupo').value = 'L';
+  agruparPreview();
+  document.getElementById('modal-agrupar').classList.add('open');
+}
+function agruparCandidatas(){
+  var cod = document.getElementById('agr-grupo').value;
+  var desde = document.getElementById('agr-desde').value, hasta = document.getElementById('agr-hasta').value;
+  var r = { lista: [], sinEntregar: 0 };
+  db.presupuestos.forEach(function(p){
+    if(p.estado !== 'Pendiente' || p.cierre || !p.cliente) return;
+    if((p.cliente.codigo || '').toUpperCase() !== cod) return;
+    if(saldoPendienteBoleta(p) <= 0.01) return;
+    var f = fechaParaResumen(p);
+    if(!f || (desde && f < desde) || (hasta && f > hasta)) return;
+    if(p.impreso && !p.entregado){ r.sinEntregar++; return; }
+    r.lista.push(p);
+  });
+  r.lista.sort(function(a, b){ return (a.cliente.nombre || '').localeCompare(b.cliente.nombre || '', 'es'); });
+  return r;
+}
+function agruparPreview(){
+  var r = agruparCandidatas(), tot = 0, h = '';
+  r.lista.forEach(function(p){
+    var s = saldoPendienteBoleta(p); tot += s;
+    h += '<tr><td>' + ctbEsc(p.cliente.nombre) + '</td><td style="text-align:right">#' + p.numero + '</td><td style="text-align:right">$' + fmt(s) + '</td></tr>';
+  });
+  document.getElementById('agr-tabla').innerHTML = h || '<tr class="empty-row"><td colspan="3">No hay boletas pendientes de este grupo en esas fechas</td></tr>';
+  document.getElementById('agr-resumen').textContent = r.lista.length + ' boleta' + (r.lista.length !== 1 ? 's' : '') + ' · Total a cobrar $' + fmt(tot) + (r.sinEntregar ? ' · ' + r.sinEntregar + ' todavía sin entregar (no se incluyen)' : '');
+}
+function confirmarAgrupar(){
+  if(rolActual !== 'admin') return;
+  var r = agruparCandidatas();
+  if(!r.lista.length){ alert('No hay boletas para agrupar.'); return; }
+  var cod = document.getElementById('agr-grupo').value;
+  var desde = document.getElementById('agr-desde').value, hasta = document.getElementById('agr-hasta').value;
+  var nombre = CIERRE_GRUPOS[cod] + ' semana ' + cierreFechaCorta(desde) + ' al ' + cierreFechaCorta(hasta);
+  if(!db.cierres) db.cierres = [];
+  var id = 'c' + Date.now();
+  db.cierres.push({ id: id, grupo: cod, nombre: nombre, desde: desde, hasta: hasta, creado: new Date().toISOString(), pagado: false });
+  r.lista.forEach(function(p){ p.cierre = id; });
+  registrarActividad('presupuesto', 'Agrupó semana: ' + nombre, r.lista.length + ' boletas: ' + r.lista.map(function(p){ return '#' + p.numero; }).join(', '));
+  guardar(); cerrarModales(); renderDeudores();
+}
+function verCierre(id){
+  var c = (db.cierres || []).find(function(x){ return x.id === id; }); if(!c) return;
+  var NL = String.fromCharCode(10);
+  var ms = cierreMiembros(c);
+  alert(c.nombre + NL + NL + ms.map(function(p){ return '#' + p.numero + ' ' + p.cliente.nombre + ': $' + fmt(saldoPendienteBoleta(p)); }).join(NL) + NL + NL + 'Total: $' + fmt(cierreSaldo(c)));
+}
+function deshacerCierre(id){
+  if(rolActual !== 'admin') return;
+  var c = (db.cierres || []).find(function(x){ return x.id === id; }); if(!c || c.pagado) return;
+  if(!confirm('¿Deshacer "' + c.nombre + '"? Las boletas vuelven a aparecer una por una en Deudores.')) return;
+  db.presupuestos.forEach(function(p){ if(p.cierre === id) delete p.cierre; });
+  db.cierres = db.cierres.filter(function(x){ return x.id !== id; });
+  registrarActividad('presupuesto', 'Deshizo la semana agrupada: ' + c.nombre, '');
+  guardar(); renderDeudores();
+}
+function cobrarGrupo(id){
+  if(rolActual !== 'admin') return;
+  var c = (db.cierres || []).find(function(x){ return x.id === id; }); if(!c) return;
+  cobroIdx = null; cobroCb = null; cobroGrupo = id;
+  document.getElementById('cobro-info').textContent = c.nombre + ' — ' + cierreMiembros(c).length + ' boletas — Total a cobrar: $' + fmt(cierreSaldo(c));
+  document.getElementById('cobro-forma').value = 'Efectivo';
+  document.getElementById('cobro-efvo').value = '';
+  cobroFormaCambio();
+  document.getElementById('modal-cobro').classList.add('open');
+}
+function confirmarCobroGrupo(){
+  var c = (db.cierres || []).find(function(x){ return x.id === cobroGrupo; }); if(!c) return;
+  var ms = cierreMiembros(c), total = Math.round(cierreSaldo(c) * 100) / 100;
+  if(!ms.length || total <= 0.01){ alert('No queda nada para cobrar en esta semana.'); return; }
+  var forma = document.getElementById('cobro-forma').value;
+  var efectivo = 0, transf = 0;
+  if(forma === 'Efectivo + Transferencia'){
+    efectivo = parseFloat(document.getElementById('cobro-efvo').value) || 0;
+    if(efectivo <= 0 || efectivo >= total){ alert('Escribí cuánto pagó en efectivo (menos que el total). El resto se toma como transferencia.'); return; }
+    efectivo = Math.round(efectivo * 100) / 100; transf = Math.round((total - efectivo) * 100) / 100;
+  }
+  var hoy = new Date().toLocaleDateString('es-AR');
+  var restoEf = efectivo, resumenCaja = {};
+  function sumaCaja(f, m){ resumenCaja[f] = Math.round(((resumenCaja[f] || 0) + m) * 100) / 100; }
+  ms.forEach(function(p){
+    var sd = Math.round(saldoPendienteBoleta(p) * 100) / 100;
+    if(!p.pagos) p.pagos = [];
+    var nota = 'Pago junto: ' + c.nombre;
+    if(forma !== 'Efectivo + Transferencia'){
+      p.pagos.push({ fecha: hoy, monto: sd, forma: forma, nota: nota }); sumaCaja(forma, sd);
+    } else {
+      var ef = Math.min(restoEf, sd); restoEf = Math.round((restoEf - ef) * 100) / 100;
+      var tr = Math.round((sd - ef) * 100) / 100;
+      if(ef > 0.001){ p.pagos.push({ fecha: hoy, monto: ef, forma: 'Efectivo', nota: nota }); sumaCaja('Efectivo', ef); }
+      if(tr > 0.001){ p.pagos.push({ fecha: hoy, monto: tr, forma: 'Transferencia', nota: nota }); sumaCaja('Transferencia', tr); }
+    }
+    p.estado = 'Aprobado';
+  });
+  if(!db.caja) db.caja = [];
+  Object.keys(resumenCaja).forEach(function(f){
+    db.caja.push({ fecha: hoy, tipo: 'entrada', medio: f, desc: 'Cobro ' + c.nombre + ' (' + ms.length + ' boletas)', monto: resumenCaja[f] });
+  });
+  c.pagado = true; c.fecha_pago = new Date().toISOString();
+  registrarActividad('pago', 'Cobró junta la semana: ' + c.nombre, ms.length + ' boletas | Total: $' + fmt(total) + ' | Forma: ' + forma);
+  cobroGrupo = null;
+  guardar(); cerrarModales(); renderDeudores(); renderAfavor(); renderDashboard(); renderPresupuestos(); try{ renderEntrega(); renderCaja(); }catch(e){}
+}
+
 function cobrarPresupuesto(idx, cb){
   var p=db.presupuestos[idx]; if(!p) return;
-  cobroIdx=idx; cobroCb=cb||null;
+  cobroIdx=idx; cobroCb=cb||null; cobroGrupo=null;
   var saldo=saldoDeuda(p);
   document.getElementById('cobro-info').textContent='Boleta #'+p.numero+' — '+(p.cliente?p.cliente.nombre:'Consumidor final')+' — Saldo a cobrar: $'+fmt(saldo);
   document.getElementById('cobro-forma').value='Efectivo';
@@ -4088,6 +4268,7 @@ function cobroFormaCambio(){
   document.getElementById('cobro-mixto').style.display=(document.getElementById('cobro-forma').value==='Efectivo + Transferencia')?'block':'none';
 }
 function confirmarCobroTotal(){
+  if(cobroGrupo){ confirmarCobroGrupo(); return; }
   var idx=cobroIdx; if(idx===null||idx===undefined) return;
   var p=db.presupuestos[idx]; if(!p) return;
   cobroIdx=null;

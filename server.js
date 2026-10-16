@@ -3375,12 +3375,13 @@ function imprimirPresupuesto(idx){
   const numStr=String(p.numero).padStart(6,'0');
   const fechaFmt=p.fecha?new Date(p.fecha+'T12:00:00').toLocaleDateString('es-AR'):'';
   const filasTotales = 15;
+  const paginas = Math.max(1, Math.ceil((p.lineas||[]).length / filasTotales));
   const cliente=p.cliente;
 
-  function filasTabla(){
+  function filasTabla(pag){
     let rows='';
     for(let i=0;i<filasTotales;i++){
-      const l=p.lineas[i];
+      const l=p.lineas[pag*filasTotales+i];
       if(l){
         rows+=\`<tr>
           <td>\${l.nombre}\${l.medida?' ('+l.medida+')':''}</td>
@@ -3395,10 +3396,11 @@ function imprimirPresupuesto(idx){
     return rows;
   }
 
-  function bloque(esOriginal){
+  function bloque(esOriginal, pag){
+    const esUltima = pag === paginas - 1;
     const marca = esOriginal ? 'X' : '';
-    const copiaLabel = esOriginal ? 'ORIGINAL' : 'DUPLICADO';
-    const deudaRow = (p.deuda&&p.deuda!=0) ? \`
+    const copiaLabel = (esOriginal ? 'ORIGINAL' : 'DUPLICADO') + (paginas > 1 ? ' — HOJA ' + (pag + 1) + ' DE ' + paginas : '');
+    const deudaRow = (esUltima && p.deuda&&p.deuda!=0) ? \`
       <div style="display:flex;justify-content:flex-end;font-size:14.5px;line-height:16px;margin-top:8px;margin-bottom:2px">
         <span style="font-weight:700;margin-right:8px">Deuda Anterior:</span>
         <span style="min-width:100px;text-align:right;border-bottom:1px solid #aaa">$ \${fmt(p.deuda)}</span>
@@ -3438,23 +3440,22 @@ function imprimirPresupuesto(idx){
           <th>PRECIO</th>
           <th>IMPORTE</th>
         </tr></thead>
-        <tbody>\${filasTabla()}</tbody>
+        <tbody>\${filasTabla(pag)}</tbody>
       </table></div>
       \${deudaRow}
       <div class="ph-footer">
         <div></div>
-        <div class="ph-total-box">
-          <span class="tlabel">TOTAL</span>
-          <span class="tflecha">▶</span>
-          <span class="tval">$ \${fmt(p.total)}</span>
-        </div>
+        \${esUltima ? '<div class="ph-total-box"><span class="tlabel">TOTAL</span><span class="tflecha">▶</span><span class="tval">$ ' + fmt(p.total) + '</span></div>' : '<div class="ph-total-box"><span class="tlabel" style="font-size:13px">Continúa en la hoja siguiente</span><span class="tflecha">▶</span></div>'}
       </div>
       \${p.obs?\`<div style="font-size:11px;line-height:13px;color:#555;margin-top:4px;border-top:1px solid #ddd;padding-top:3px">\${p.obs}</div>\`:''}
     </div>\`;
   }
 
-  document.getElementById('print-area').innerHTML =
-    \`<div class="presup-hoja">\${bloque(true)}<div class="divider-cut"></div>\${bloque(false)}</div>\`;
+  let hojas = '';
+  for(let pg = 0; pg < paginas; pg++){
+    hojas += '<div class="presup-hoja"' + (pg < paginas - 1 ? ' style="page-break-after:always"' : '') + '>' + bloque(true, pg) + '<div class="divider-cut"></div>' + bloque(false, pg) + '</div>';
+  }
+  document.getElementById('print-area').innerHTML = hojas;
   ajustarTextoImpresion();
   window.print();
 }

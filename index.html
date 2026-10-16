@@ -3883,7 +3883,7 @@ function renderEntrega(){
     return q.split(' ').every(function(w){ return txt.indexOf(w)>-1; });
   });
   lista.sort(function(a,b){ return String(a.fecha_impresion||'').localeCompare(String(b.fecha_impresion||'')); });
-  document.getElementById('entrega-total').textContent=lista.length?(lista.length+' boleta'+(lista.length>1?'s':'')+' por entregar'):'Nada pendiente de entrega';
+  document.getElementById('entrega-total').textContent=lista.length?(lista.length+' boleta'+(lista.length>1?'s':'')+' por entregar'+(rolActual==='admin'?' — Total: $'+fmt(lista.reduce(function(a,p){return a+(p.total||0);},0))+' · A cobrar: $'+fmt(lista.reduce(function(a,p){return a+Math.max(0,saldoPendienteBoleta(p));},0)):'')):'Nada pendiente de entrega';
   if(!lista.length){ t.innerHTML='<tr class="empty-row"><td colspan="6">Sin boletas pendientes de entrega</td></tr>'; return; }
   t.innerHTML=lista.map(function(p){
     var i=db.presupuestos.indexOf(p);

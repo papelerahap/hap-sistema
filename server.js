@@ -3220,7 +3220,7 @@ function calcularResumenOficina(lista){
     if(desde&&(!p.fecha||p.fecha<desde)) return;
     if(hasta&&(!p.fecha||p.fecha>hasta)) return;
     var fila=porNombre[p.cliente.nombre]; if(!fila) return;
-    var consumo=(typeof p.subtotal==='number')?p.subtotal:((p.total||0)-(p.deuda||0));
+    var consumo=p.total||0; // total de la boleta: incluye la deuda anterior o el saldo a favor que traía
     fila.boletas++; fila.total+=consumo;
     var pagoReal=(p.pagos||[]).reduce(function(a,x){ return a+(x.traspaso?0:(x.monto||0)); },0);
     fila.pago+=pagoReal; fila.apagar+=Math.max(0,consumo-pagoReal);
@@ -3262,7 +3262,7 @@ function abrirResumenOficina(lista){
 function dibujarResumenOficina(){
   var r=resumenOficinaDatos; if(!r) return; var lista=r.lista;
   document.getElementById('resumen-titulo').textContent='Resumen de consumo — '+lista;
-  document.getElementById('resumen-periodo').textContent='Período: '+fmtFechaAR(r.desde)+' al '+fmtFechaAR(r.hasta)+' · Sin la deuda anterior de cada boleta';
+  document.getElementById('resumen-periodo').textContent='Período: '+fmtFechaAR(r.desde)+' al '+fmtFechaAR(r.hasta)+' · Total de cada boleta (con la deuda anterior o saldo a favor)';
   var h='';
   r.filas.forEach(function(x,i){
     h+='<tr'+(x.incluir?'':' style="opacity:.4"')+'><td><input type="checkbox" '+(x.incluir?'checked ':'')+'onchange="resumenIncluir('+i+',this.checked)" title="Incluir en el resumen"></td><td>'+x.nombre+'</td><td style="text-align:right">'+x.boletas+'</td><td style="text-align:right">$'+fmt(x.total)+'</td><td style="text-align:right">$'+fmt(x.pago)+'</td><td style="text-align:right;font-weight:700">$'+fmt(x.apagar)+'</td><td style="text-align:right;font-weight:600;color:'+(x.neto>0.01?'var(--red)':(x.neto<-0.01?'var(--green)':'var(--text3)'))+'">'+cuentaTexto(x.neto)+'</td></tr>';
@@ -3330,7 +3330,7 @@ function xlsxResumen(r){
   function n(col, fila, num, st){ return '<c r="' + L[col] + fila + '" s="' + st + '"><v>' + (Math.round(num * 100) / 100) + '</v></c>'; }
   function fila(num, celdas, alto){ rows.push('<row r="' + num + '"' + (alto ? ' ht="' + alto + '" customHeight="1"' : '') + '>' + celdas.join('') + '</row>'); }
   fila(1, [t(0, 1, 'Resumen de consumo ' + r.lista, 1)], 24); merges.push('A1:G1');
-  fila(2, [t(0, 2, 'Del ' + fmtFechaAR(r.desde) + ' al ' + fmtFechaAR(r.hasta) + ' · Sin la deuda anterior de cada boleta', 2)]); merges.push('A2:G2');
+  fila(2, [t(0, 2, 'Del ' + fmtFechaAR(r.desde) + ' al ' + fmtFechaAR(r.hasta) + ' · Total de cada boleta (con la deuda anterior o saldo a favor)', 2)]); merges.push('A2:G2');
   var enc = ['Cliente','Boletas','Consumo','Pagó','A pagar (período)','Cuenta','Importe cuenta'];
   fila(4, enc.map(function(x, i){ return t(i, 4, x, 3); }), 22);
   var f = 5;
@@ -3376,7 +3376,7 @@ function imprimirResumenOficina(){
   var cel='border:1px solid #bbb;padding:5px 8px;';
   var h='<div style="font-family:Arial,sans-serif;color:#000">' +
     '<div style="font-size:20px;font-weight:700">Resumen de consumo ' + ctbEsc(r.lista) + '</div>' +
-    '<div style="font-size:12px;margin:2px 0 12px">Del ' + fmtFechaAR(r.desde) + ' al ' + fmtFechaAR(r.hasta) + ' · Sin la deuda anterior de cada boleta</div>' +
+    '<div style="font-size:12px;margin:2px 0 12px">Del ' + fmtFechaAR(r.desde) + ' al ' + fmtFechaAR(r.hasta) + ' · Total de cada boleta (con la deuda anterior o saldo a favor)</div>' +
     '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#1F3864;color:#fff">' +
     ['Cliente','Boletas','Consumo','Pagó','A pagar (período)','Cuenta','Importe cuenta'].map(function(x, i){ return '<th style="' + cel + 'background:#1F3864;color:#fff;text-transform:none;font-size:12px;text-align:' + (i === 0 ? 'left' : 'center') + '">' + x + '</th>'; }).join('') + '</tr></thead><tbody>';
   r.filas.forEach(function(x){

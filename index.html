@@ -469,7 +469,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
       <div class="section-header">
         <h2>Deudores 🔴</h2>
         <span id="deudores-total" style="font-size:13px;color:var(--red);font-weight:600"></span>
-        <button class="btn btn-sm" id="btn-agrupar" onclick="abrirAgrupar()" style="display:none" title="Junta las boletas de una semana de Gloria, Luis o Edgardo en un solo deudor">🗂️ Agrupar semana</button>
+        <button class="btn btn-sm" id="btn-agrupar" onclick="abrirAgrupar()" style="display:none" title="Junta varias boletas en un solo deudor y elegís cuáles entran">🗂️ Juntar deudas en una sola</button>
       </div>
       <div style="margin-bottom:10px"><input type="search" id="deudores-buscar" placeholder="🔍 Buscar por cliente, número de boleta o teléfono..." oninput="renderDeudores()" style="width:100%;max-width:420px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
@@ -1044,14 +1044,15 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
 <div class="modal-backdrop" id="modal-agrupar">
   <div class="modal" style="max-width:560px;width:95%">
     <h3>Agrupar una semana como un solo deudor</h3>
-    <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Las boletas pendientes del grupo (por código G, L o E) en esas fechas pasan a figurar en Deudores como una sola línea. Cuando te pagan todo junto lo marcás una vez y quedan todas cobradas.</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Elegí el grupo (o cualquier cliente) y las fechas, y tildá las boletas que querés juntar. Pasan a figurar en Deudores como una sola línea; cuando te pagan todo junto lo marcás una vez y quedan todas cobradas.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
-      <select id="agr-grupo" onchange="agruparPreview()" style="padding:6px 10px"><option value="G">Gloria (G)</option><option value="L" selected>Luis (L)</option><option value="E">Edgardo (E)</option></select>
+      <select id="agr-grupo" onchange="agruparPreview()" style="padding:6px 10px"><option value="G">Gloria (G)</option><option value="L" selected>Luis (L)</option><option value="E">Edgardo (E)</option><option value="*">Cualquier cliente (elijo yo)</option></select>
       <label style="font-size:12px">Desde</label><input type="date" id="agr-desde" onchange="agruparPreview()" style="padding:6px 10px">
       <label style="font-size:12px">Hasta</label><input type="date" id="agr-hasta" onchange="agruparPreview()" style="padding:6px 10px">
     </div>
+    <div style="margin-bottom:10px"><input type="text" id="agr-nombre" placeholder="Nombre del deudor (se completa solo, podés cambiarlo)" oninput="this.dataset.manual='1'" style="width:100%;padding:6px 10px"></div>
     <div id="agr-resumen" style="font-size:13px;font-weight:600;margin-bottom:8px"></div>
-    <div style="max-height:40vh;overflow:auto;margin-bottom:12px"><table style="width:100%"><thead><tr><th>Cliente</th><th style="text-align:right">Boleta</th><th style="text-align:right">Debe</th></tr></thead><tbody id="agr-tabla"></tbody></table></div>
+    <div style="max-height:40vh;overflow:auto;margin-bottom:12px"><table style="width:100%"><thead><tr><th><input type="checkbox" id="agr-todos" checked onchange="agruparTodos(this.checked)" title="Marcar / desmarcar todas"></th><th>Cliente</th><th style="text-align:right">Boleta</th><th style="text-align:right">Debe</th></tr></thead><tbody id="agr-tabla"></tbody></table></div>
     <div class="modal-footer">
       <button class="btn" onclick="cerrarModales()">Cancelar</button>
       <button class="btn btn-green" onclick="confirmarAgrupar()">🗂️ Agrupar</button>
@@ -2123,7 +2124,7 @@ function renderClientes(){
     const realIdx=db.clientes.indexOf(c);
     const col=colores[c.codigo]||'var(--text3)';
     const codBadge=c.codigo
-      ?`<span style="background:${col};color:#fff;padding:2px 8px;border-radius:100px;font-size:11px;font-weight:700">${c.codigo}</span>`
+      ?`${c.grupo?`<span style="background:${col};color:#fff;padding:2px 8px;border-radius:100px;font-size:11px;font-weight:700">${c.codigo}</span>`:''}`
       :`<span style="color:var(--text3)">—</span>`;
     return`<tr>
       <td><strong>${c.nombre}</strong><br><span style="font-size:11px;color:var(--text3)">${c.iva}</span></td>
@@ -4005,7 +4006,7 @@ function renderDeudores(){
       <td><strong>$${fmt(tot)}</strong></td>
       <td style="color:var(--green)">${pag>0?'$'+fmt(pag):'<span style="color:var(--text3)">—</span>'}</td>
       <td><strong style="color:var(--red)">$${fmt(sal)}</strong></td>
-      <td><span class="badge badge-low">Semana agrupada</span></td>
+      <td><span class="badge badge-low">Deudas juntas</span></td>
       <td style="white-space:nowrap;display:flex;gap:4px;align-items:center">
         ${rolActual==='admin'?'<button class="btn btn-sm btn-green" onclick="cobrarGrupo(\''+c.id+'\')">✅ Cobrar todo junto</button>':''}
         <button class="btn btn-sm" onclick="verCierre('${c.id}')">📋 Ver boletas</button>
@@ -4181,16 +4182,20 @@ function abrirAgrupar(){
   document.getElementById('agr-desde').value = fechaISO(lunes);
   document.getElementById('agr-hasta').value = fechaISO(viernes);
   document.getElementById('agr-grupo').value = 'L';
+  agrSel = {};
+  var nm = document.getElementById('agr-nombre'); nm.value = ''; nm.dataset.manual = '';
+  document.getElementById('agr-todos').checked = true;
   agruparPreview();
   document.getElementById('modal-agrupar').classList.add('open');
 }
+var agrSel = {};
 function agruparCandidatas(){
   var cod = document.getElementById('agr-grupo').value;
   var desde = document.getElementById('agr-desde').value, hasta = document.getElementById('agr-hasta').value;
   var r = { lista: [], sinEntregar: 0 };
   db.presupuestos.forEach(function(p){
     if(p.estado !== 'Pendiente' || p.cierre || !p.cliente) return;
-    if((p.cliente.codigo || '').toUpperCase() !== cod) return;
+    if(cod !== '*' && (p.cliente.codigo || '').toUpperCase() !== cod) return;
     if(saldoPendienteBoleta(p) <= 0.01) return;
     var f = fechaParaResumen(p);
     if(!f || (desde && f < desde) || (hasta && f > hasta)) return;
@@ -4200,25 +4205,42 @@ function agruparCandidatas(){
   r.lista.sort(function(a, b){ return (a.cliente.nombre || '').localeCompare(b.cliente.nombre || '', 'es'); });
   return r;
 }
+function agruparElegidas(){
+  return agruparCandidatas().lista.filter(function(p){ return agrSel[p.numero] !== false; });
+}
+function agruparNombreAuto(){
+  var cod = document.getElementById('agr-grupo').value;
+  var desde = document.getElementById('agr-desde').value, hasta = document.getElementById('agr-hasta').value;
+  var rango = (desde || hasta) ? cierreFechaCorta(desde) + ' al ' + cierreFechaCorta(hasta) : '';
+  return cod === '*' ? 'Deudas juntas ' + rango : CIERRE_GRUPOS[cod] + ' semana ' + rango;
+}
+function agruparToggle(num, on){ agrSel[num] = !!on; agruparPreview(); }
+function agruparTodos(on){
+  agruparCandidatas().lista.forEach(function(p){ agrSel[p.numero] = !!on; });
+  agruparPreview();
+}
 function agruparPreview(){
-  var r = agruparCandidatas(), tot = 0, h = '';
+  var r = agruparCandidatas(), tot = 0, h = '', n = 0;
   r.lista.forEach(function(p){
-    var s = saldoPendienteBoleta(p); tot += s;
-    h += '<tr><td>' + ctbEsc(p.cliente.nombre) + '</td><td style="text-align:right">#' + p.numero + '</td><td style="text-align:right">$' + fmt(s) + '</td></tr>';
+    var s = saldoPendienteBoleta(p), on = agrSel[p.numero] !== false;
+    if(on){ tot += s; n++; }
+    h += '<tr><td><input type="checkbox" ' + (on ? 'checked ' : '') + 'onchange="agruparToggle(' + p.numero + ',this.checked)"></td><td>' + ctbEsc(p.cliente.nombre) + '</td><td style="text-align:right">#' + p.numero + '</td><td style="text-align:right">$' + fmt(s) + '</td></tr>';
   });
-  document.getElementById('agr-tabla').innerHTML = h || '<tr class="empty-row"><td colspan="3">No hay boletas pendientes de este grupo en esas fechas</td></tr>';
-  document.getElementById('agr-resumen').textContent = r.lista.length + ' boleta' + (r.lista.length !== 1 ? 's' : '') + ' · Total a cobrar $' + fmt(tot) + (r.sinEntregar ? ' · ' + r.sinEntregar + ' todavía sin entregar (no se incluyen)' : '');
+  document.getElementById('agr-tabla').innerHTML = h || '<tr class="empty-row"><td colspan="4">No hay boletas pendientes de este grupo en esas fechas</td></tr>';
+  var nmEl = document.getElementById('agr-nombre');
+  if(!nmEl.dataset.manual) nmEl.value = agruparNombreAuto();
+  document.getElementById('agr-resumen').textContent = n + ' de ' + r.lista.length + ' boleta' + (r.lista.length !== 1 ? 's' : '') + ' elegida' + (n !== 1 ? 's' : '') + ' · Total a cobrar $' + fmt(tot) + (r.sinEntregar ? ' · ' + r.sinEntregar + ' todavía sin entregar (no se incluyen)' : '');
 }
 function confirmarAgrupar(){
   if(rolActual !== 'admin') return;
-  var r = agruparCandidatas();
-  if(!r.lista.length){ alert('No hay boletas para agrupar.'); return; }
+  var r = { lista: agruparElegidas() };
+  if(!r.lista.length){ alert('No hay boletas elegidas para juntar.'); return; }
   var cod = document.getElementById('agr-grupo').value;
   var desde = document.getElementById('agr-desde').value, hasta = document.getElementById('agr-hasta').value;
-  var nombre = CIERRE_GRUPOS[cod] + ' semana ' + cierreFechaCorta(desde) + ' al ' + cierreFechaCorta(hasta);
+  var nombre = (document.getElementById('agr-nombre').value || '').trim() || agruparNombreAuto();
   if(!db.cierres) db.cierres = [];
   var id = 'c' + Date.now();
-  db.cierres.push({ id: id, grupo: cod, nombre: nombre, desde: desde, hasta: hasta, creado: new Date().toISOString(), pagado: false });
+  db.cierres.push({ id: id, grupo: cod === '*' ? '' : cod, nombre: nombre, desde: desde, hasta: hasta, creado: new Date().toISOString(), pagado: false });
   r.lista.forEach(function(p){ p.cierre = id; });
   registrarActividad('presupuesto', 'Agrupó semana: ' + nombre, r.lista.length + ' boletas: ' + r.lista.map(function(p){ return '#' + p.numero; }).join(', '));
   guardar(); cerrarModales(); renderDeudores();

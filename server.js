@@ -2990,7 +2990,7 @@ async function guardarListas(){
 function calcSaldoPendienteCliente(cliIdx){
   const cli=db.clientes[cliIdx]; if(!cli)return 0;
   return db.presupuestos
-    .filter(p=>p.estado==='Pendiente'&&p.cliente&&p.cliente.nombre===cli.nombre)
+    .filter(p=>p.estado==='Pendiente'&&!(p.cierre&&cierreActivo(p.cierre))&&p.cliente&&p.cliente.nombre===cli.nombre)
     .reduce((sum,p)=>sum+Math.max(0,saldoPendienteBoleta(p)),0);
 }
 function calcSaldoAFavorCliente(cliIdx){
@@ -3708,7 +3708,7 @@ function candidatosTraspaso(nueva){
     return p.numero < nueva.numero;
   });
   // igual que al armar la boleta: si hay deuda se arrastra la deuda; si no, el saldo a favor
-  var deudas = mias.filter(function(p){ return p.estado === 'Pendiente' && saldoPendienteBoleta(p) > 0.01; });
+  var deudas = mias.filter(function(p){ return p.estado === 'Pendiente' && !(p.cierre && cierreActivo(p.cierre)) && saldoPendienteBoleta(p) > 0.01; });
   if(deudas.length) return deudas;
   return mias.filter(function(p){ return saldoPendienteBoleta(p) < -0.01; });
 }

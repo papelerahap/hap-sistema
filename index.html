@@ -3245,7 +3245,7 @@ function calcularResumenOficina(lista){
   var porNombre={};
   db.clientes.forEach(function(c){
     var cod=(c.codigo||'').toUpperCase();
-    if(!(cod===cod0 || (!cod && c.lista_precio===lista))) return;
+    if(cod!==cod0) return; // solo entran los clientes con el codigo del grupo (G, L o E); sin codigo no entra
     var fila={nombre:c.nombre,incluir:!c.fuera_resumen,boletas:0,total:0,pago:0,apagar:0,debe:0,favor:0};
     g.filas.push(fila); porNombre[c.nombre]=fila;
   });

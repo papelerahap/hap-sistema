@@ -3223,7 +3223,7 @@ function calcularResumenOficina(lista){
     var consumo=(typeof p.subtotal==='number')?p.subtotal:((p.total||0)-(p.deuda||0));
     fila.boletas++; fila.total+=consumo;
     var pagoReal=(p.pagos||[]).reduce(function(a,x){ return a+(x.traspaso?0:(x.monto||0)); },0);
-    fila.pago+=Math.min(consumo,pagoReal); fila.apagar+=Math.max(0,consumo-pagoReal);
+    fila.pago+=pagoReal; fila.apagar+=Math.max(0,consumo-pagoReal);
   });
   g.filas.sort(function(a,b){ return a.nombre.localeCompare(b.nombre,'es'); });
   g.filas.forEach(function(x){ x.neto=x.debe-x.favor; });

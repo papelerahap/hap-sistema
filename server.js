@@ -3947,7 +3947,7 @@ function renderDeudores(){
   const nItems=pendientes.length+grupos.length;
   const totalSaldo=pendientes.reduce((a,p)=>a+saldoPendienteBoleta(p),0)+grupos.reduce((a,c)=>a+cierreSaldo(c),0);
   document.getElementById('deudores-total').textContent=
-    nItems?(rolActual==='admin'?\`\${nItems} deudor\${nItems>1?'es':''} — Saldo: $\${fmt(totalSaldo)}\`:\`\${nItems} deudor\${nItems>1?'es':''}\`):'Sin deudores en este filtro';
+    nItems?(rolActual==='admin'?\`\${nItems} \${grupos.length?'deudor':'boleta'}\${nItems>1?(grupos.length?'es':'s'):''} — Saldo: $\${fmt(totalSaldo)}\`:\`\${nItems} \${grupos.length?'deudor':'boleta'}\${nItems>1?(grupos.length?'es':'s'):''}\`):'Sin deudores en este filtro';
   // Mostrar a favor debajo
   const totalFavor = db.presupuestos.reduce((sum,p)=>sum+saldoAFavor(p),0);
   const resumenFavor = document.getElementById('afavor-resumen');

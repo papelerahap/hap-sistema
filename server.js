@@ -3213,6 +3213,7 @@ function calcularResumenOficina(lista){
   });
   db.presupuestos.forEach(function(p){
     if(!p.cliente||p.estado==='Rechazado'||p.estado==='Vencido') return;
+    if(hasta&&p.fecha&&p.fecha>hasta) return; // boletas posteriores a la fecha Hasta no cuentan en nada
     var fc=porNombre[p.cliente.nombre];
     if(fc){ var sd=saldoPendienteBoleta(p); if(sd>0.01&&p.estado==='Pendiente') fc.debe+=sd; else if(sd<-0.01) fc.favor+=-sd; }
     if(desde&&(!p.fecha||p.fecha<desde)) return;

@@ -545,6 +545,27 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
             <button class="btn btn-primary" id="planilla-guardar" onclick="guardarPlanilla()">💾 Guardar todo</button>
           </div>
         </div>
+        <div class="card" style="margin-bottom:1rem">
+          <div class="card-body">
+            <div style="font-weight:700;margin-bottom:8px">📥 Cargar la lista de precios del proveedor (Excel)</div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <input type="file" id="xl-archivo" accept=".xlsx,.xls,.csv" onchange="xlLeerArchivo(this)">
+              <span id="xl-estado" style="font-size:13px;color:var(--text2)">Busca cada código de tus productos en el Excel y trae el precio como costo.</span>
+            </div>
+            <div id="xl-config" style="display:none;margin-top:10px">
+              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px">
+                <label>Hoja <select id="xl-hoja" onchange="xlCambioHoja()" style="padding:5px 8px"></select></label>
+                <label>Columna del código <select id="xl-col-cod" style="padding:5px 8px"></select></label>
+                <label>Columna del precio <select id="xl-col-precio" style="padding:5px 8px"></select></label>
+                <label>Primera fila con datos <input type="number" id="xl-fila" min="1" style="width:70px;padding:5px 8px"></label>
+                <label>Descuento % <input type="text" id="xl-desc" placeholder="ej: 10 o 10+5" style="width:100px;padding:5px 8px"></label>
+                <button class="btn btn-primary" onclick="xlAplicar()">Calcular costos</button>
+              </div>
+              <div id="xl-vista" style="margin-top:10px;overflow:auto;max-width:100%"></div>
+              <div id="xl-resultado"></div>
+            </div>
+          </div>
+        </div>
         <div class="card">
           <table>
             <thead><tr>
@@ -4530,6 +4551,133 @@ function parseCosto(s){
 }
 function fmtInp(n){ return String(Math.round(n * 1000) / 1000).replace('.', ','); }
 
+// ===== Excel del proveedor: trae el costo por código =====
+var xlHojas = {};
+function xlLetra(i){ var s = ''; i++; while(i > 0){ var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
+function xlEstado(msg, color){ var e = document.getElementById('xl-estado'); if(e){ e.textContent = msg; e.style.color = color || 'var(--text2)'; } }
+function xlCargarLibreria(cb){
+  if(window.XLSX){ cb(); return; }
+  xlEstado('⏳ Cargando lector de Excel...');
+  var sc = document.createElement('script');
+  sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  sc.onload = function(){ cb(); };
+  sc.onerror = function(){ xlEstado('No se pudo cargar el lector de Excel (revisá la conexión a internet).', 'var(--red)'); };
+  document.head.appendChild(sc);
+}
+function xlLeerArchivo(inp){
+  var f = inp.files && inp.files[0]; if(!f) return;
+  xlCargarLibreria(function(){
+    var fr = new FileReader();
+    fr.onload = function(){
+      try{
+        var wb = window.XLSX.read(fr.result, { type: 'array' });
+        xlHojas = {};
+        wb.SheetNames.forEach(function(n){
+          xlHojas[n] = window.XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' });
+        });
+        xlConfigurar();
+      }catch(e){ xlEstado('No pude leer ese archivo. Probá guardarlo como .xlsx.', 'var(--red)'); }
+    };
+    fr.readAsArrayBuffer(f);
+  });
+}
+function xlConfigurar(){
+  var nombres = Object.keys(xlHojas);
+  var sel = document.getElementById('xl-hoja');
+  sel.innerHTML = nombres.map(function(n){ return '<option value="' + ctbEsc(n) + '">' + ctbEsc(n) + '</option>'; }).join('');
+  var prov = (db.proveedores || []).find(function(p){ return p.nombre === planillaProv; }) || {};
+  document.getElementById('xl-desc').value = prov.descuento || '';
+  document.getElementById('xl-config').style.display = nombres.length ? 'block' : 'none';
+  xlEstado(nombres.length ? '✅ Archivo leído. Revisá las columnas y apretá "Calcular costos".' : 'El archivo está vacío.', nombres.length ? 'var(--green)' : 'var(--red)');
+  xlCambioHoja(true);
+}
+function xlRowsActual(){ return xlHojas[document.getElementById('xl-hoja').value] || []; }
+function xlCambioHoja(inicial){
+  var rows = xlRowsActual();
+  var ncol = 0;
+  rows.slice(0, 40).forEach(function(r){ if(r.length > ncol) ncol = r.length; });
+  // buscar la fila de títulos: una que tenga algo tipo "código" y algo tipo "precio"
+  var hdr = -1, cCod = -1, cPre = -1;
+  for(var i = 0; i < Math.min(rows.length, 25) && hdr < 0; i++){
+    var a = -1, b = -1;
+    rows[i].forEach(function(v, j){
+      var t = String(v).toLowerCase();
+      if(a < 0 && /(^| )(cod|c[oó]d|art|sku|ref)/.test(t)) a = j;
+      if(b < 0 && /(precio|costo|lista|importe|p.? ?unit)/.test(t)) b = j;
+    });
+    if(a >= 0 && b >= 0){ hdr = i; cCod = a; cPre = b; }
+  }
+  var prov = (db.proveedores || []).find(function(p){ return p.nombre === planillaProv; }) || {};
+  if(hdr < 0){ cCod = (prov.xl_cod != null) ? prov.xl_cod : 0; cPre = (prov.xl_precio != null) ? prov.xl_precio : 1; }
+  var ops = '';
+  for(var c = 0; c < Math.max(ncol, 2); c++){
+    var tit = hdr >= 0 ? String(rows[hdr][c] == null ? '' : rows[hdr][c]).slice(0, 25) : String(rows[0] && rows[0][c] != null ? rows[0][c] : '').slice(0, 25);
+    ops += '<option value="' + c + '">' + xlLetra(c) + (tit ? ' — ' + ctbEsc(tit) : '') + '</option>';
+  }
+  document.getElementById('xl-col-cod').innerHTML = ops; document.getElementById('xl-col-precio').innerHTML = ops;
+  document.getElementById('xl-col-cod').value = cCod; document.getElementById('xl-col-precio').value = cPre;
+  document.getElementById('xl-fila').value = hdr >= 0 ? hdr + 2 : 1;
+  var h = '<table style="font-size:12px;border-collapse:collapse">';
+  rows.slice(0, 6).forEach(function(r, i){
+    h += '<tr><td style="color:var(--text3);padding:2px 6px">' + (i + 1) + '</td>';
+    for(var c2 = 0; c2 < Math.min(ncol, 8); c2++) h += '<td style="padding:2px 8px;border:1px solid var(--border)">' + ctbEsc(String(r[c2] == null ? '' : r[c2]).slice(0, 28)) + '</td>';
+    h += '</tr>';
+  });
+  document.getElementById('xl-vista').innerHTML = h + '</table>';
+  document.getElementById('xl-resultado').innerHTML = '';
+}
+function xlFactor(txt){
+  // "10" = 10% de descuento; "10+5" = 10% y después 5% más
+  var f = 1, ok = true;
+  String(txt || '').split('+').forEach(function(x){
+    if(!x.trim()) return;
+    var d = parseCosto(x);
+    if(d === null || d < 0 || d >= 100){ ok = false; return; }
+    f = f * (1 - d / 100);
+  });
+  return ok ? f : null;
+}
+function xlClave(v){
+  var s = String(v == null ? '' : v).trim().toUpperCase().split(' ').join('');
+  if(typeof v === 'number' && isFinite(v)) s = String(v);
+  return s;
+}
+function xlSinCeros(s){ return /^0+[0-9A-Z]/.test(s) ? s.replace(/^0+/, '') : s; }
+function xlAplicar(){
+  var rows = xlRowsActual();
+  var factor = xlFactor(document.getElementById('xl-desc').value);
+  if(factor === null){ alert('El descuento no es válido. Escribí por ejemplo 10 o 10+5.'); return; }
+  var cCod = parseInt(document.getElementById('xl-col-cod').value, 10), cPre = parseInt(document.getElementById('xl-col-precio').value, 10);
+  var desde = Math.max(1, parseInt(document.getElementById('xl-fila').value, 10) || 1);
+  var precios = {};
+  for(var i = desde - 1; i < rows.length; i++){
+    var r = rows[i], k = xlClave(r[cCod]); if(!k) continue;
+    var raw = r[cPre], pr = (typeof raw === 'number') ? raw : parseCosto(raw);
+    if(pr === null || !(pr > 0)) continue;
+    if(precios[k] === undefined) precios[k] = pr;
+    var k2 = xlSinCeros(k); if(precios[k2] === undefined) precios[k2] = pr;
+  }
+  var puestos = 0, sinCambio = 0, faltan = [], sinCodigo = [];
+  for(var n = 0; n < planillaItems.length; n++){
+    var p = planillaProducto(n); if(!p) continue;
+    var kc = xlClave(p.codigo);
+    if(!kc){ sinCodigo.push(p.nombre); continue; }
+    var pr2 = precios[kc] !== undefined ? precios[kc] : precios[xlSinCeros(kc)];
+    if(pr2 === undefined){ faltan.push((p.codigo || '') + ' — ' + p.nombre); continue; }
+    var costo = Math.round(pr2 * factor * 100) / 100;
+    if(Math.abs(costo - (p.costo || 0)) < 0.005) sinCambio++;
+    document.getElementById('pl-in-' + n).value = fmtInp(costo);
+    puestos++;
+  }
+  planillaCambio();
+  var prov = (db.proveedores || []).find(function(x){ return x.nombre === planillaProv; });
+  if(prov){ prov.descuento = document.getElementById('xl-desc').value.trim(); prov.xl_cod = cCod; prov.xl_precio = cPre; }
+  var h = '<div style="font-weight:600;margin-top:8px;color:var(--green)">✅ ' + puestos + ' costo' + (puestos !== 1 ? 's' : '') + ' completado' + (puestos !== 1 ? 's' : '') + (sinCambio ? ' (' + sinCambio + ' ya estaban igual)' : '') + (factor !== 1 ? ' con descuento ' + ctbEsc(document.getElementById('xl-desc').value) + '%' : '') + '. Revisá los resaltados y apretá 💾 Guardar todo.</div>';
+  if(faltan.length) h += '<div style="margin-top:6px;font-size:13px;color:var(--amber)"><strong>' + faltan.length + ' no se encontraron en el Excel</strong> (quedan con el costo que tenían):<br>' + faltan.map(ctbEsc).join('<br>') + '</div>';
+  if(sinCodigo.length) h += '<div style="margin-top:6px;font-size:13px;color:var(--text3)">' + sinCodigo.length + ' sin código cargado, no se pueden buscar: ' + sinCodigo.map(ctbEsc).join(', ') + '</div>';
+  document.getElementById('xl-resultado').innerHTML = h;
+}
+
 function planillaProducto(k){
   return db.productos.find(function(p){ return p.nombre === planillaItems[k]; });
 }
@@ -4549,6 +4697,7 @@ function abrirPlanilla(provIdx){
   document.getElementById('planilla-filtro').value = '';
   document.getElementById('planilla-solosin').checked = false;
   document.getElementById('planilla-igual').value = '';
+  xlHojas = {}; document.getElementById('xl-config').style.display = 'none'; document.getElementById('xl-archivo').value = ''; xlEstado('Busca cada código de tus productos en el Excel y trae el precio como costo.');
   showSubseccion('sub-planilla');
   renderPlanilla();
 }

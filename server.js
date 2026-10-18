@@ -655,11 +655,16 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
       </div>
       <!-- Filtro fecha -->
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
-        <button class="filtro-btn active" onclick="setFiltroCaja('hoy',this)">Hoy</button>
-        <button class="filtro-btn" onclick="setFiltroCaja('semana',this)">Esta semana</button>
-        <button class="filtro-btn" onclick="setFiltroCaja('mes',this)">Este mes</button>
-        <button class="filtro-btn" onclick="setFiltroCaja('todo',this)">Todo</button>
+        <button class="filtro-btn fc-per active" onclick="setFiltroCaja('hoy',this)">Hoy</button>
+        <button class="filtro-btn fc-per" onclick="setFiltroCaja('semana',this)">Esta semana</button>
+        <button class="filtro-btn fc-per" onclick="setFiltroCaja('mes',this)">Este mes</button>
+        <button class="filtro-btn fc-per" onclick="setFiltroCaja('todo',this)">Todo</button>
+        <span style="font-size:13px;color:var(--text2);margin-left:8px">📅 Entre fechas:</span>
+        <input type="date" id="caja-desde" onchange="setRangoCaja()" style="padding:5px 8px">
+        <span style="font-size:13px;color:var(--text2)">y</span>
+        <input type="date" id="caja-hasta" onchange="setRangoCaja()" style="padding:5px 8px">
       </div>
+      <div id="caja-periodo" style="display:none;margin-bottom:1rem" class="card"><div class="card-body" style="display:flex;gap:18px;flex-wrap:wrap;align-items:center;font-size:14px"></div></div>
       <!-- Filtro medio -->
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:1rem;flex-wrap:wrap">
         <button class="filtro-btn active" id="filtro-medio-btn-todos" onclick="setFiltroMedio('todos',this)">💵🏦 Todos</button>
@@ -4418,11 +4423,17 @@ let filtroCaja='hoy';
 let filtroMedioCaja='todos';
 function setFiltroCaja(f,el){
   filtroCaja=f;
-  document.querySelectorAll('#caja .filtro-btn').forEach(b=>{
-    if(['hoy','semana','mes','todo'].some(x=>b.onclick?.toString().includes("'"+x+"'"))||b.textContent.includes('Hoy')||b.textContent.includes('semana')||b.textContent.includes('mes')||b.textContent.includes('Todo'))
-      b.classList.remove('active');
-  });
+  document.querySelectorAll('#caja .fc-per').forEach(b=>b.classList.remove('active'));
+  var d1=document.getElementById('caja-desde'), d2=document.getElementById('caja-hasta');
+  if(d1) d1.value=''; if(d2) d2.value='';
   el.classList.add('active'); renderCaja();
+}
+function setRangoCaja(){
+  var d1=document.getElementById('caja-desde').value, d2=document.getElementById('caja-hasta').value;
+  if(!d1&&!d2){ var b=document.querySelector("#caja .fc-per"); if(b) setFiltroCaja('hoy',b); return; }
+  filtroCaja='rango';
+  document.querySelectorAll('#caja .fc-per').forEach(b=>b.classList.remove('active'));
+  renderCaja();
 }
 function setFiltroMedio(medio,el){
   filtroMedioCaja=medio;
@@ -4467,7 +4478,14 @@ function renderCaja(){
   // Guardar índices reales antes de filtrar
   const cajaConIdx=db.caja.map((m,i)=>({m,i}));
   const movs=cajaConIdx.filter(({m})=>{
-    if(filtroCaja!=='todo'){
+    if(filtroCaja==='rango'){
+      const d=parseFechaAR(m.fecha); if(!d)return false;
+      d.setHours(0,0,0,0);
+      const rd=(document.getElementById('caja-desde')||{}).value, rh=(document.getElementById('caja-hasta')||{}).value;
+      const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      if(rd&&k<rd) return false;
+      if(rh&&k>rh) return false;
+    } else if(filtroCaja!=='todo'){
       const d=parseFechaAR(m.fecha); if(!d)return false;
       d.setHours(0,0,0,0);
       if(filtroCaja==='hoy'&&d.getTime()!==hoy.getTime()) return false;
@@ -4487,6 +4505,18 @@ function renderCaja(){
   document.getElementById('caja-transf').textContent='$'+fmt(trEnt-trSal);
   document.getElementById('caja-total').textContent='$'+fmt((efEnt-efSal)+(trEnt-trSal));
   const t=document.getElementById('tabla-caja');
+  const pcard=document.getElementById('caja-periodo');
+  if(pcard){
+    if(filtroCaja==='rango'){
+      let pe=0,ps=0;
+      movs.forEach(({m})=>{ if(m.tipo==='entrada') pe+=m.monto; else ps+=m.monto; });
+      pcard.style.display='block';
+      pcard.firstElementChild.innerHTML='<strong>'+movs.length+' movimiento'+(movs.length!==1?'s':'')+' en esas fechas</strong>'+
+        '<span>Entradas: <strong style="color:var(--green)">$'+fmt(pe)+'</strong></span>'+
+        '<span>Salidas: <strong style="color:var(--red)">$'+fmt(ps)+'</strong></span>'+
+        '<span>Neto: <strong>$'+fmt(pe-ps)+'</strong></span>';
+    } else pcard.style.display='none';
+  }
   if(!movs.length){t.innerHTML='<tr class="empty-row"><td colspan="7">Sin movimientos en este período</td></tr>';return;}
   t.innerHTML=movs.map(({m,i})=>\`<tr>
     <td style="font-size:12px">\${m.fecha}</td>

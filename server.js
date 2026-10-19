@@ -27,6 +27,9 @@ const HTML = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#185FA5">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Distribuidora HAP – Sistema de gestión</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -187,6 +190,35 @@ tr.pg-new td { background: var(--green-light); }
 tr.pg-del td { background: var(--red-light); }
 tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
 .pg-bar { position: sticky; bottom: 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 0; background: var(--bg); }
+
+.m-top,.m-fondo{display:none}
+@media(max-width:800px){
+  html,body{overflow-x:hidden}
+  .m-top{display:flex;position:fixed;top:0;left:0;right:0;height:48px;z-index:20;background:var(--bg2);border-bottom:1px solid var(--border);align-items:center;gap:10px;padding:0 12px;font-weight:700;font-size:15px}
+  .m-top button{font-size:24px;background:none;border:none;color:var(--text);cursor:pointer;padding:4px 8px}
+  .sidebar{transform:translateX(-105%);transition:transform .2s;z-index:50;width:260px;min-width:260px;box-shadow:0 0 24px rgba(0,0,0,.3)}
+  .app.menu-abierto .sidebar{transform:none}
+  .app.menu-abierto .m-fondo{display:block;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40}
+  .main{margin-left:0;padding:60px 10px 20px;max-width:100%;width:100%}
+  .nav-item{padding:12px 1rem;font-size:15px}
+  .section-header{flex-wrap:wrap;gap:8px}
+  .section-header h2{font-size:18px}
+  .stats-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .stat-card{padding:.75rem}
+  .stat-card .svalue{font-size:20px}
+  .card{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .card-header{flex-wrap:wrap;gap:8px;padding:.75rem}
+  .card-body{padding:.75rem}
+  table{font-size:12px}
+  th,td{padding:8px 8px}
+  .form-grid-2,.form-grid-3{grid-template-columns:1fr}
+  [style*="grid-template-columns"]:not(.stats-grid){grid-template-columns:1fr!important}
+  input,select,textarea{font-size:16px!important;max-width:100%}
+  .btn{min-height:38px}
+  .modal,.modal-wide{width:100vw;max-width:100vw;max-height:100vh;height:100vh;border-radius:0;padding:1rem}
+  .modal-footer{flex-wrap:wrap;position:sticky;bottom:0;background:var(--bg2)}
+  .login-box{width:92vw;max-width:92vw}
+}
 @media print {
   :root[data-tema="oscuro"] { color-scheme: light; --bg: #f7f6f3; --bg2: #ffffff; --text: #1a1a18; --text2: #6b6a66; --text3: #9e9c97; --border: #e0ded9; --border2: #c8c6c0; --blue: #185FA5; --blue-light: #e6f1fb; --blue-text: #0C447C; --green: #3B6D11; --green-light: #EAF3DE; --amber: #854F0B; --amber-light: #FAEEDA; --red: #A32D2D; --red-light: #FCEBEB; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -257,6 +289,8 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
 </div>
 
 <div class="app" id="main-app" style="display:none">
+  <div class="m-top"><button onclick="menuMovil()" aria-label="Menu">☰</button><span>📦 Distribuidora HAP</span></div>
+  <div class="m-fondo" onclick="menuMovil(false)"></div>
   <nav class="sidebar">
     <div class="sidebar-logo">
       <h1>📦 Distribuidora HAP</h1>
@@ -1932,13 +1966,14 @@ async function cargarDesdeServidor() {
 
 cargar();
 
+function menuMovil(v){ var a = document.getElementById('main-app'); if(!a) return; a.classList.toggle('menu-abierto', typeof v === 'boolean' ? v : !a.classList.contains('menu-abierto')); }
 function showSection(id, el) {
   const permitidas = seccionesPermitidas();
   if(!permitidas.includes(id)) return;
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  el.classList.add('active');
+  el.classList.add('active'); menuMovil(false); window.scrollTo(0, 0);
   ({ dashboard: renderDashboard, productos: ()=>renderProductos(), clientes: ()=>renderClientes(), listas: ()=>renderLista(), presupuestos: renderPresupuestos, entrega: renderEntrega, deudores: renderDeudores, afavor: renderAfavor, caja: renderCaja, proveedores: renderProveedores, ganancia: ()=>{}, ventas: iniciarVentas, contabilidad: iniciarContabilidad, controlstock: iniciarControlStock, actividad: renderActividad, config: cargarConfig })[id]?.();
 }
 

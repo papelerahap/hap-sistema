@@ -591,6 +591,18 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
             <button class="btn" onclick="cerrarCuentaProv()">← Volver</button>
           </div>
         </div>
+        <div class="card" style="margin-bottom:1rem">
+          <div class="card-body">
+            <div style="font-weight:700;margin-bottom:8px">🧮 Calcular porcentaje</div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px">
+              <label>Sobre $ <input type="text" inputmode="decimal" id="cp-base" placeholder="monto de la compra" oninput="calcPctProv()" style="width:150px;padding:5px 8px;text-align:right"></label>
+              <label>Porcentaje <input type="text" inputmode="decimal" id="cp-pct" placeholder="25" oninput="calcPctProv()" style="width:70px;padding:5px 8px;text-align:right"> %</label>
+              <button class="btn btn-sm" onclick="cpUsar('pedidos')" title="Suma de los pedidos que se ven abajo (según el filtro de fechas)">Usar total de pedidos</button>
+              <button class="btn btn-sm" onclick="cpUsar('deuda')">Usar deuda actual</button>
+            </div>
+            <div id="cp-resultado" style="margin-top:10px;font-size:14px"></div>
+          </div>
+        </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:13px">
           <select id="cuenta-filtro" onchange="renderCuentaProv()" style="padding:5px 8px"><option value="todo">Historial completo</option><option value="pedido">Solo pedidos</option><option value="pago">Solo pagos</option></select>
           <span>Desde</span><input type="date" id="cuenta-desde" onchange="renderCuentaProv()" style="padding:5px 8px">
@@ -5372,6 +5384,7 @@ function abrirCuentaProv(i){
   var prov = db.proveedores[i]; if(!prov) return;
   cuentaProv = prov.nombre;
   document.getElementById('cuenta-filtro').value = 'todo'; document.getElementById('cuenta-desde').value = ''; document.getElementById('cuenta-hasta').value = '';
+  document.getElementById('cp-base').value = ''; document.getElementById('cp-pct').value = ''; calcPctProv();
   showSubseccion('sub-cuenta');
   renderCuentaProv();
 }
@@ -5413,6 +5426,31 @@ function renderCuentaProv(){
       '<td style="font-weight:700">$' + fmt(x.saldo) + '</td>' +
       '<td><button class="btn btn-sm btn-danger" onclick="eliminarMovProv(\\'' + m.id + '\\')">🗑️</button></td></tr>';
   }).join('');
+}
+function cpUsar(que){
+  var v = 0;
+  if(que === 'deuda') v = Math.max(0, provSaldo(cuentaProv));
+  else {
+    var ft = document.getElementById('cuenta-filtro').value, fd = document.getElementById('cuenta-desde').value, fh = document.getElementById('cuenta-hasta').value;
+    provMovs(cuentaProv).forEach(function(m){
+      if(m.tipo !== 'pedido') return;
+      if(fd && String(m.fecha) < fd) return;
+      if(fh && String(m.fecha) > fh) return;
+      v += m.monto;
+    });
+  }
+  document.getElementById('cp-base').value = v > 0 ? String(Math.round(v * 100) / 100).replace('.', ',') : '';
+  calcPctProv();
+}
+function calcPctProv(){
+  var base = parseCosto(document.getElementById('cp-base').value), pct = parseCosto(document.getElementById('cp-pct').value);
+  var out = document.getElementById('cp-resultado');
+  if(base === null || pct === null){ out.innerHTML = '<span style="color:var(--text3)">Poné el monto y el porcentaje para ver el resultado.</span>'; return; }
+  var x = Math.round(base * pct) / 100;
+  out.innerHTML =
+    '<div>El <strong>' + fmt(pct) + '%</strong> de $' + fmt(base) + ' es <strong>$' + fmt(x) + '</strong></div>' +
+    '<div style="margin-top:4px">Sumándole el ' + fmt(pct) + '%: <strong>$' + fmt(base + x) + '</strong></div>' +
+    '<div style="margin-top:4px">Restándole el ' + fmt(pct) + '%: <strong>$' + fmt(base - x) + '</strong></div>';
 }
 function abrirMovProv(tipo){
   if(rolActual !== 'admin' || !cuentaProv) return;

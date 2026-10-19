@@ -39,6 +39,17 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .section { display: none; } .section.active { display: block; }
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
 .section-header h2 { font-size: 20px; font-weight: 600; }
+
+.dash-2col{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}
+@media(max-width:900px){.dash-2col{grid-template-columns:1fr}}
+.rec-item{display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border,#e5e5e5);font-size:13px}
+.rec-item.vencido .rec-t{color:#c0392b;font-weight:600}
+.rec-item.hecho .rec-t{text-decoration:line-through;color:var(--text3)}
+.rec-cuando{font-size:11px;color:var(--text3)}
+#rec-avisos{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;flex-direction:column;gap:8px;width:min(92vw,420px)}
+.rec-aviso{background:#fff8e1;border:2px solid #f5a623;border-radius:10px;padding:12px 14px;box-shadow:0 6px 24px rgba(0,0,0,.25);font-size:14px;color:#222}
+.rec-aviso b{display:block;margin-bottom:6px;font-size:15px}
+.rec-aviso button{margin:6px 6px 0 0}
 .stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 1.5rem; }
 .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; }
 .stat-card .slabel { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
@@ -282,6 +293,8 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
         <div class="stat-card stat-amber"><div class="slabel">Stock bajo</div><div class="svalue" id="s-bajo">0</div><div class="ssub">requieren reposición</div></div>
         <div class="stat-card"><div class="slabel">Clientes</div><div class="svalue" id="s-cli">0</div><div class="ssub">registrados</div></div>
       </div>
+      <div class="dash-2col">
+      <div>
       <div class="card">
         <div class="card-header"><h3>Últimos presupuestos</h3></div>
         <table><thead><tr><th>N°</th><th>Fecha</th><th>Cliente</th><th>Total</th><th>Estado</th><th></th></tr></thead>
@@ -291,6 +304,18 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
         <div class="card-header"><h3>Alertas de stock</h3></div>
         <table><thead><tr><th>Producto</th><th>Stock actual</th><th>Mínimo</th><th>Estado</th></tr></thead>
         <tbody id="dash-alertas"></tbody></table>
+      </div>
+      </div>
+      <div class="card" id="rec-card">
+        <div class="card-header"><h3>🔔 Recordatorios</h3></div>
+        <div class="card-body">
+          <input type="text" id="rec-texto" placeholder="Ej: llamar a proveedor, cobrar a Luis..." style="width:100%;margin-bottom:6px" onkeydown="if(event.key==='Enter')agregarRecordatorio()">
+          <div style="display:flex;gap:6px;margin-bottom:6px"><input type="date" id="rec-fecha" style="flex:1"><input type="time" id="rec-hora" style="width:100px"></div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Si no ponés hora, avisa a las 9:00. Sin fecha queda como nota, sin aviso.</div>
+          <button class="btn btn-primary" style="width:100%" onclick="agregarRecordatorio()">Agregar recordatorio</button>
+          <div id="rec-lista" style="margin-top:10px"></div>
+        </div>
+      </div>
       </div>
     </div>
 
@@ -1528,6 +1553,77 @@ function errorLogin(r){
   el.style.display = 'block';
   document.getElementById('login-pass').value = '';
 }
+
+// ===== Recordatorios =====
+function recEsc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function recCuando(r){
+  if(!r.fecha) return null;
+  var p = r.fecha.split('-'); var h = (r.hora || '09:00').split(':');
+  return new Date(+p[0], +p[1]-1, +p[2], +h[0], +h[1] || 0, 0);
+}
+function recAvisados(){ try{ return JSON.parse(localStorage.getItem('hap_rec_avisados') || '{}'); }catch(e){ return {}; } }
+function recMarcarAvisado(id, clave){ try{ var a = recAvisados(); a[id] = clave; localStorage.setItem('hap_rec_avisados', JSON.stringify(a)); }catch(e){} }
+function agregarRecordatorio(){
+  var t = document.getElementById('rec-texto'); var texto = t.value.trim();
+  if(!texto){ t.focus(); return; }
+  if(!db.recordatorios) db.recordatorios = [];
+  var f = document.getElementById('rec-fecha').value, h = document.getElementById('rec-hora').value;
+  db.recordatorios.push({ id: 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2,6), texto: texto, fecha: f, hora: h, hecho: false, creado: new Date().toISOString() });
+  t.value = ''; document.getElementById('rec-fecha').value = ''; document.getElementById('rec-hora').value = '';
+  guardar(); renderRecordatorios(); revisarRecordatorios();
+}
+function recHecho(id){ var r = (db.recordatorios||[]).find(function(x){ return x.id === id; }); if(!r) return; r.hecho = !r.hecho; guardar(); renderRecordatorios(); revisarRecordatorios(); }
+function recEliminar(id){ db.recordatorios = (db.recordatorios||[]).filter(function(x){ return x.id !== id; }); guardar(); renderRecordatorios(); revisarRecordatorios(); }
+function recPosponer(id, min){
+  var r = (db.recordatorios||[]).find(function(x){ return x.id === id; }); if(!r) return;
+  var d = new Date(Date.now() + min*60000);
+  var z = function(n){ return String(n).padStart(2,'0'); };
+  r.fecha = d.getFullYear() + '-' + z(d.getMonth()+1) + '-' + z(d.getDate()); r.hora = z(d.getHours()) + ':' + z(d.getMinutes());
+  guardar(); renderRecordatorios(); revisarRecordatorios();
+}
+function renderRecordatorios(){
+  var el = document.getElementById('rec-lista'); if(!el) return;
+  var ahora = new Date();
+  var arr = (db.recordatorios || []).slice().sort(function(a, b){
+    if(a.hecho !== b.hecho) return a.hecho ? 1 : -1;
+    var ca = recCuando(a), cb = recCuando(b);
+    if(!ca && !cb) return 0; if(!ca) return 1; if(!cb) return -1; return ca - cb;
+  });
+  if(!arr.length){ el.innerHTML = '<div style="font-size:12px;color:var(--text3)">No hay recordatorios.</div>'; return; }
+  el.innerHTML = arr.map(function(r){
+    var c = recCuando(r); var venc = !r.hecho && c && c <= ahora;
+    var cuando = c ? c.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'}) + (r.hora ? ' ' + r.hora : '') : 'Sin fecha';
+    return '<div class="rec-item' + (venc ? ' vencido' : '') + (r.hecho ? ' hecho' : '') + '">' +
+      '<input type="checkbox" ' + (r.hecho ? 'checked ' : '') + 'onchange="recHecho(' + "'" + r.id + "'" + ')" title="Marcar como hecho">' +
+      '<div style="flex:1"><div class="rec-t">' + recEsc(r.texto) + '</div><div class="rec-cuando">' + (venc ? 'Vencido · ' : '') + cuando + '</div></div>' +
+      '<button class="btn" style="padding:2px 8px" onclick="recEliminar(' + "'" + r.id + "'" + ')" title="Borrar">✕</button></div>';
+  }).join('');
+}
+function revisarRecordatorios(){
+  if(!rolActual) return;
+  var cont = document.getElementById('rec-avisos');
+  if(!cont){ cont = document.createElement('div'); cont.id = 'rec-avisos'; document.body.appendChild(cont); }
+  var ahora = new Date(), av = recAvisados(), vivos = {};
+  (db.recordatorios || []).forEach(function(r){
+    var c = recCuando(r); if(r.hecho || !c || c > ahora) return;
+    var clave = r.fecha + ' ' + (r.hora || '');
+    vivos[r.id] = 1;
+    if(av[r.id] === clave || document.getElementById('rec-av-' + r.id)) return;
+    var d = document.createElement('div'); d.className = 'rec-aviso'; d.id = 'rec-av-' + r.id;
+    d.innerHTML = '<b>🔔 Recordatorio</b>' + recEsc(r.texto) + '<br>' +
+      '<button class="btn btn-primary" data-a="ok">Hecho</button><button class="btn" data-a="p10">Posponer 10 min</button><button class="btn" data-a="p60">1 hora</button><button class="btn" data-a="x">Cerrar</button>';
+    d.addEventListener('click', function(ev){
+      var a = ev.target && ev.target.getAttribute('data-a'); if(!a) return;
+      d.remove(); recMarcarAvisado(r.id, clave);
+      if(a === 'ok') recHecho(r.id); else if(a === 'p10') recPosponer(r.id, 10); else if(a === 'p60') recPosponer(r.id, 60);
+    });
+    cont.appendChild(d);
+    try{ var ac = new (window.AudioContext || window.webkitAudioContext)(); var o = ac.createOscillator(); o.frequency.value = 880; o.connect(ac.destination); o.start(); setTimeout(function(){ o.stop(); ac.close(); }, 350); }catch(e){}
+  });
+  Array.prototype.slice.call(cont.children).forEach(function(n){ var id = n.id.slice(7); if(!vivos[id]) n.remove(); });
+  renderRecordatorios();
+}
+setInterval(revisarRecordatorios, 20000);
 async function entrarConSesion(r, esAdminLogin){
   authToken = r.j.token;
   if(esAdminLogin){ rolActual = 'admin'; esSocioLogin = false; nivelActual = 'admin'; }
@@ -1714,7 +1810,7 @@ function avisoServidor(ok){
   }
 }
 var snapSync = null;
-var CLAVES_REG = { presupuestos: 'numero', caja: 'id', prov_movs: 'id' };
+var CLAVES_REG = { presupuestos: 'numero', caja: 'id', prov_movs: 'id', recordatorios: 'id' };
 function cajaStampIds(arr){
   var vistos = {};
   (arr || []).forEach(function(m){
@@ -1803,6 +1899,7 @@ async function cargarDesdeServidor() {
       if(!db.controles_stock) db.controles_stock = [];
       if(!db.cierres) db.cierres = [];
       if(!db.prov_movs) db.prov_movs = [];
+      if(!db.recordatorios) db.recordatorios = [];
       ordenarDatos();
       tomarSnapshot();
       localStorage.setItem('hap_db', JSON.stringify(db));
@@ -3827,6 +3924,7 @@ function imprimirPresupuesto(idx){
 
 // ---- DASHBOARD ----
 function renderDashboard(){
+  renderRecordatorios(); revisarRecordatorios();
   document.getElementById('fecha-hoy').textContent=new Date().toLocaleDateString('es-AR',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   document.getElementById('s-pres').textContent=db.presupuestos.length;
   document.getElementById('s-prod').textContent=db.productos.length;

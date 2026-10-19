@@ -532,9 +532,9 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
         </div>
         <div class="card" style="margin-bottom:1rem">
           <div class="card-body">
-            <div style="font-weight:700;margin-bottom:8px">📥 Cargar la lista de precios del proveedor (Excel)</div>
+            <div style="font-weight:700;margin-bottom:8px">📥 Cargar la lista de precios del proveedor (Excel o PDF)</div>
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-              <input type="file" id="xl-archivo" accept=".xlsx,.xls,.csv" onchange="xlLeerArchivo(this)">
+              <input type="file" id="xl-archivo" accept=".xlsx,.xls,.csv,.pdf" onchange="xlLeerArchivo(this)">
               <span id="xl-estado" style="font-size:13px;color:var(--text2)">Busca cada código de tus productos en el Excel y trae el precio como costo.</span>
             </div>
             <div id="xl-config" style="display:none;margin-top:10px">
@@ -4626,8 +4626,66 @@ function xlCargarLibreria(cb){
   sc.onerror = function(){ xlEstado('No se pudo cargar el lector de Excel (revisá la conexión a internet).', 'var(--red)'); };
   document.head.appendChild(sc);
 }
+var xlEsPdf = false;
+function xlItemsARows(items){
+  var its = items.filter(function(i){ return String(i.s).trim() !== ''; }).sort(function(a, b){ return (b.y - a.y) || (a.x - b.x); });
+  var filas = [];
+  its.forEach(function(it){
+    var f = filas[filas.length - 1];
+    if(f && Math.abs(f.y - it.y) <= 3) f.items.push(it); else filas.push({ y: it.y, items: [it] });
+  });
+  return filas.map(function(f){
+    f.items.sort(function(a, b){ return a.x - b.x; });
+    var cel = [], ult = null;
+    f.items.forEach(function(it){
+      if(ult && (it.x - (ult.x + ult.w)) < Math.max(2, (it.h || 8) * 0.5)) cel[cel.length - 1] += ((it.x - (ult.x + ult.w)) > 0.5 ? ' ' : '') + it.s;
+      else cel.push(it.s);
+      ult = it;
+    });
+    return cel.map(function(c){ return c.trim(); }).filter(function(c){ return c !== ''; });
+  });
+}
+function xlCargarPdfJs(cb){
+  if(window.pdfjsLib){ cb(); return; }
+  xlEstado('⏳ Cargando lector de PDF...');
+  var sc = document.createElement('script');
+  sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  sc.onload = function(){
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    cb();
+  };
+  sc.onerror = function(){ xlEstado('No se pudo cargar el lector de PDF (revisá la conexión a internet).', 'var(--red)'); };
+  document.head.appendChild(sc);
+}
+function xlLeerPdf(f){
+  xlCargarPdfJs(function(){
+    xlEstado('⏳ Leyendo el PDF...');
+    var fr = new FileReader();
+    fr.onload = function(){
+      window.pdfjsLib.getDocument({ data: new Uint8Array(fr.result) }).promise.then(function(doc){
+        var todas = [], n = 1;
+        function pagina(){
+          if(n > doc.numPages){
+            xlHojas = { 'PDF': todas }; xlEsPdf = true;
+            if(!todas.length){ xlEstado('No encontré texto en ese PDF (puede ser una foto escaneada). Probá con el Excel.', 'var(--red)'); return; }
+            xlConfigurar(); return;
+          }
+          doc.getPage(n).then(function(pg){ return pg.getTextContent(); }).then(function(tc){
+            var items = tc.items.map(function(i){ return { s: i.str, x: i.transform[4], y: i.transform[5], w: i.width, h: i.height }; });
+            todas = todas.concat(xlItemsARows(items));
+            n++; pagina();
+          });
+        }
+        pagina();
+      }).catch(function(){ xlEstado('No pude leer ese PDF.', 'var(--red)'); });
+    };
+    fr.readAsArrayBuffer(f);
+  });
+}
 function xlLeerArchivo(inp){
   var f = inp.files && inp.files[0]; if(!f) return;
+  if(/[.]pdf$/i.test(f.name)){ xlLeerPdf(f); return; }
+  xlEsPdf = false;
   xlCargarLibreria(function(){
     var fr = new FileReader();
     fr.onload = function(){
@@ -4671,7 +4729,8 @@ function xlCambioHoja(inicial){
   }
   var prov = (db.proveedores || []).find(function(p){ return p.nombre === planillaProv; }) || {};
   if(hdr < 0){ cCod = (prov.xl_cod != null) ? prov.xl_cod : 0; cPre = (prov.xl_precio != null) ? prov.xl_precio : 1; }
-  var ops = '';
+  if(xlEsPdf){ cCod = 0; cPre = -1; }
+  var ops = xlEsPdf ? '<option value="-1">Última columna</option><option value="-2">Anteúltima columna</option><option value="-3">Antes de la anteúltima</option>' : '';
   for(var c = 0; c < Math.max(ncol, 2); c++){
     var tit = hdr >= 0 ? String(rows[hdr][c] == null ? '' : rows[hdr][c]).slice(0, 25) : String(rows[0] && rows[0][c] != null ? rows[0][c] : '').slice(0, 25);
     ops += '<option value="' + c + '">' + xlLetra(c) + (tit ? ' — ' + ctbEsc(tit) : '') + '</option>';
@@ -4713,8 +4772,8 @@ function xlAplicar(){
   var desde = Math.max(1, parseInt(document.getElementById('xl-fila').value, 10) || 1);
   var precios = {};
   for(var i = desde - 1; i < rows.length; i++){
-    var r = rows[i], k = xlClave(r[cCod]); if(!k) continue;
-    var raw = r[cPre], pr = (typeof raw === 'number') ? raw : parseCosto(raw);
+    var r = rows[i], k = xlClave(cCod < 0 ? r[r.length + cCod] : r[cCod]); if(!k) continue;
+    var raw = cPre < 0 ? r[r.length + cPre] : r[cPre], pr = (typeof raw === 'number') ? raw : parseCosto(raw);
     if(pr === null || !(pr > 0)) continue;
     if(precios[k] === undefined) precios[k] = pr;
     var k2 = xlSinCeros(k); if(precios[k2] === undefined) precios[k2] = pr;

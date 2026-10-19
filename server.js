@@ -579,6 +579,33 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
         <p style="font-size:12px;color:var(--text3);margin-top:8px">Tips: marcá varios productos (con Shift podés marcar un rango) y poné el mismo costo a todos de una vez. También podés copiar una columna de precios desde Excel y pegarla en la primera celda de "Nuevo costo": se completa hacia abajo. Las celdas vacías no cambian el costo que ya tenía el producto.</p>
       </div>
 
+      <!-- Sub: cuenta corriente de un proveedor -->
+      <div id="sub-cuenta" style="display:none">
+        <div class="card" style="margin-bottom:1rem">
+          <div class="card-body" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <div style="font-size:16px;font-weight:700" id="cuenta-titulo">Cuenta</div>
+            <div id="cuenta-saldo" style="font-size:15px"></div>
+            <span style="flex:1"></span>
+            <button class="btn btn-primary" onclick="abrirMovProv('pago')">💸 Registrar pago</button>
+            <button class="btn" onclick="abrirMovProv('pedido')">+ Cargar deuda</button>
+            <button class="btn" onclick="cerrarCuentaProv()">← Volver</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:13px">
+          <select id="cuenta-filtro" onchange="renderCuentaProv()" style="padding:5px 8px"><option value="todo">Historial completo</option><option value="pedido">Solo pedidos</option><option value="pago">Solo pagos</option></select>
+          <span>Desde</span><input type="date" id="cuenta-desde" onchange="renderCuentaProv()" style="padding:5px 8px">
+          <span>Hasta</span><input type="date" id="cuenta-hasta" onchange="renderCuentaProv()" style="padding:5px 8px">
+          <span id="cuenta-totales" style="font-weight:600;margin-left:8px"></span>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Fecha</th><th>Detalle</th><th>Pedido (suma)</th><th>Pago (resta)</th><th>Saldo</th><th></th></tr></thead>
+            <tbody id="tabla-cuenta"></tbody>
+          </table>
+        </div>
+        <p style="font-size:12px;color:var(--text3);margin-top:8px">Los pedidos se cargan con el botón 📦 Registrar pedido de cada proveedor y suman acá su total. Los pagos restan. El saldo es lo que le debés.</p>
+      </div>
+
       <!-- Sub: asignador de productos -->
       <div id="sub-asignar" style="display:none">
         <div class="card" style="margin-bottom:1rem">
@@ -1182,9 +1209,36 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
     <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Productos recibidos</div>
     <div id="lineas-pedido"></div>
     <button class="btn" style="width:100%;justify-content:center;margin-top:8px" onclick="agregarLineaPedido()">+ Agregar producto</button>
+    <div id="ped-admin-extra" style="margin-top:12px">
+      <div class="form-group"><label>Total del pedido ($) — se suma a lo que le debés al proveedor</label><input type="text" inputmode="decimal" id="ped-total" placeholder="0,00" oninput="this.dataset.manual='1'"></div>
+      <label style="font-size:13px;display:flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="ped-stock" checked> Sumar los productos al stock</label>
+    </div>
     <div class="modal-footer">
       <button class="btn" onclick="cerrarModales()">Cancelar</button>
-      <button class="btn btn-primary" onclick="confirmarPedido()">✅ Confirmar — sumar al stock</button>
+      <button class="btn btn-primary" onclick="confirmarPedido()">✅ Confirmar pedido</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL MOVIMIENTO CUENTA PROVEEDOR -->
+<div class="modal-backdrop" id="modal-provmov">
+  <div class="modal">
+    <h3 id="titulo-pmov">Movimiento con proveedor</h3>
+    <div class="form-grid form-grid-2" style="margin-bottom:12px">
+      <div class="form-group"><label>Tipo</label><select id="pmov-tipo" onchange="pmovCambio()"><option value="pago">Pago al proveedor (baja la deuda)</option><option value="pedido">Deuda / pedido sin cargar productos (sube la deuda)</option></select></div>
+      <div class="form-group"><label>Monto ($)</label><input type="text" inputmode="decimal" id="pmov-monto" placeholder="0,00"></div>
+    </div>
+    <div class="form-grid form-grid-2" style="margin-bottom:12px">
+      <div class="form-group"><label>Fecha</label><input type="date" id="pmov-fecha"></div>
+      <div class="form-group"><label>Nota (opcional)</label><input type="text" id="pmov-desc" placeholder="Ej: factura 123, cheque, saldo anterior..."></div>
+    </div>
+    <div id="pmov-pagoextra" style="margin-bottom:12px">
+      <div class="form-group" style="margin-bottom:8px"><label>Pagado con</label><select id="pmov-medio"><option>Efectivo</option><option>Transferencia</option></select></div>
+      <label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="pmov-caja" checked> Descontarlo también de la Caja (sale como movimiento)</label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="cerrarModales()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarMovProv()">Guardar</button>
     </div>
   </div>
 </div>
@@ -1614,7 +1668,7 @@ function avisoServidor(ok){
   }
 }
 var snapSync = null;
-var CLAVES_REG = { presupuestos: 'numero', caja: 'id' };
+var CLAVES_REG = { presupuestos: 'numero', caja: 'id', prov_movs: 'id' };
 function cajaStampIds(arr){
   var vistos = {};
   (arr || []).forEach(function(m){
@@ -1702,6 +1756,7 @@ async function cargarDesdeServidor() {
       if(!db.listas_margen) db.listas_margen = {};
       if(!db.controles_stock) db.controles_stock = [];
       if(!db.cierres) db.cierres = [];
+      if(!db.prov_movs) db.prov_movs = [];
       ordenarDatos();
       tomarSnapshot();
       localStorage.setItem('hap_db', JSON.stringify(db));
@@ -5023,6 +5078,7 @@ function showSubseccion(id){
   document.getElementById('sub-proveedores').style.display = id==='sub-proveedores'?'block':'none';
   document.getElementById('sub-asignar').style.display = id==='sub-asignar'?'block':'none';
   var spl = document.getElementById('sub-planilla'); if(spl) spl.style.display = id==='sub-planilla'?'block':'none';
+  var scu = document.getElementById('sub-cuenta'); if(scu) scu.style.display = id==='sub-cuenta'?'block':'none';
   if(id==='sub-asignar') renderAsignador();
 }
 
@@ -5114,7 +5170,7 @@ function guardarProveedor(){
   if(editProvIdx!==null){
     var nomViejo = db.proveedores[editProvIdx] ? db.proveedores[editProvIdx].nombre : '';
     db.proveedores[editProvIdx]=datos;
-    if(nomViejo && nomViejo !== datos.nombre) db.productos.forEach(function(p){ if(p.proveedor === nomViejo) p.proveedor = datos.nombre; });
+    if(nomViejo && nomViejo !== datos.nombre){ db.productos.forEach(function(p){ if(p.proveedor === nomViejo) p.proveedor = datos.nombre; }); (db.prov_movs || []).forEach(function(m){ if(m.proveedor === nomViejo) m.proveedor = datos.nombre; }); }
   }
   else db.proveedores.push(datos);
   ordenarDatos();
@@ -5206,7 +5262,8 @@ function renderProveedores(){
           \${info.length?\`<span style="font-size:12px;color:var(--text2);margin-left:12px">\${info.join('  ·  ')}</span>\`:''}
           \${prov.notas?\`<div style="font-size:11px;color:var(--text3);margin-top:2px">\${prov.notas}</div>\`:''}
         </div>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;align-items:center">
+          \${rolActual==='admin'?\`<span style="font-size:13px;margin-right:4px">\${provSaldoTexto(provSaldo(prov.nombre))}</span><button class="btn btn-sm" onclick="abrirCuentaProv(\${i})">📒 Cuenta</button>\`:''}
           <button class="btn btn-sm btn-primary" onclick="abrirModalPedido(\${i})">📦 Registrar pedido</button>
           \${rolActual==='admin'?\`
           <button class="btn btn-sm" onclick="abrirPlanilla(\${i})">📝 Planilla de costos</button>
@@ -5231,6 +5288,10 @@ function renderProveedores(){
     </div>\`;
   }
 
+  if(rolActual==='admin'){
+    var totDeuda=db.proveedores.reduce(function(a,p){ return a+Math.max(0,provSaldo(p.nombre)); },0);
+    if(totDeuda>0.005) html='<div style="margin-bottom:1rem;font-size:14px;font-weight:600">Deuda total con proveedores: <span style="color:var(--red)">$'+fmt(totDeuda)+'</span></div>'+html;
+  }
   cont.innerHTML = html;
 }
 
@@ -5289,6 +5350,135 @@ function confirmarAsignarProd(){
 }
 
 // ---- PEDIDOS A PROVEEDOR ----
+// ===== Cuenta corriente con cada proveedor =====
+function provFechaCorta(iso){
+  var p = String(iso || '').split('-');
+  return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : '';
+}
+function provMovs(nombre){
+  return (db.prov_movs || []).filter(function(m){ return (m.proveedor || '').toLowerCase() === String(nombre || '').toLowerCase(); });
+}
+function provSaldo(nombre){
+  return Math.round(provMovs(nombre).reduce(function(a, m){ return a + (m.tipo === 'pago' ? -m.monto : m.monto); }, 0) * 100) / 100;
+}
+function provSaldoTexto(s){
+  if(s > 0.005) return '<span style="color:var(--red);font-weight:700">Le debemos $' + fmt(s) + '</span>';
+  if(s < -0.005) return '<span style="color:var(--green);font-weight:700">A favor nuestro $' + fmt(-s) + '</span>';
+  return '<span style="color:var(--text3)">Al día</span>';
+}
+var cuentaProv = null;
+function abrirCuentaProv(i){
+  if(rolActual !== 'admin') return;
+  var prov = db.proveedores[i]; if(!prov) return;
+  cuentaProv = prov.nombre;
+  document.getElementById('cuenta-filtro').value = 'todo'; document.getElementById('cuenta-desde').value = ''; document.getElementById('cuenta-hasta').value = '';
+  showSubseccion('sub-cuenta');
+  renderCuentaProv();
+}
+function cerrarCuentaProv(){
+  cuentaProv = null;
+  showSubseccion('sub-proveedores');
+  renderProveedores();
+}
+function renderCuentaProv(){
+  if(!cuentaProv) return;
+  var movs = provMovs(cuentaProv);
+  document.getElementById('cuenta-titulo').textContent = '📒 Cuenta de ' + cuentaProv;
+  document.getElementById('cuenta-saldo').innerHTML = provSaldoTexto(provSaldo(cuentaProv));
+  var orden = movs.slice().sort(function(a, b){ return String(a.fecha || '').localeCompare(String(b.fecha || '')) || String(a.creado || '').localeCompare(String(b.creado || '')); });
+  var acum = 0, filas = orden.map(function(m){
+    acum = Math.round((acum + (m.tipo === 'pago' ? -m.monto : m.monto)) * 100) / 100;
+    return { m: m, saldo: acum };
+  }).reverse();
+  var ft = document.getElementById('cuenta-filtro').value, fd = document.getElementById('cuenta-desde').value, fh = document.getElementById('cuenta-hasta').value;
+  filas = filas.filter(function(x){
+    if(ft !== 'todo' && x.m.tipo !== ft) return false;
+    if(fd && String(x.m.fecha) < fd) return false;
+    if(fh && String(x.m.fecha) > fh) return false;
+    return true;
+  });
+  var sp = 0, sg = 0, np = 0, ng = 0;
+  filas.forEach(function(x){ if(x.m.tipo === 'pago'){ sg += x.m.monto; ng++; } else { sp += x.m.monto; np++; } });
+  document.getElementById('cuenta-totales').innerHTML = (ft !== 'pago' ? 'Pedidos: <span style="color:var(--red)">$' + fmt(sp) + '</span> (' + np + ')' : '') + (ft === 'todo' ? ' · ' : '') + (ft !== 'pedido' ? 'Pagos: <span style="color:var(--green)">$' + fmt(sg) + '</span> (' + ng + ')' : '');
+  var t = document.getElementById('tabla-cuenta');
+  if(!filas.length){ t.innerHTML = '<tr class="empty-row"><td colspan="6">Todavía no hay movimientos con este proveedor</td></tr>'; return; }
+  t.innerHTML = filas.map(function(x){
+    var m = x.m, esPago = m.tipo === 'pago';
+    var det = ctbEsc(m.desc || (esPago ? 'Pago' : 'Pedido'));
+    if(m.lineas && m.lineas.length) det += '<div style="font-size:11px;color:var(--text3)">' + m.lineas.map(function(l){ return ctbEsc(l.cant + ' x ' + l.nombre) + (l.costo ? ' a $' + fmt(l.costo) : ''); }).join(' · ') + '</div>';
+    if(esPago && m.medio) det += '<div style="font-size:11px;color:var(--text3)">' + ctbEsc(m.medio) + (m.caja_id ? ' · salió de Caja' : '') + '</div>';
+    return '<tr><td style="font-size:12px">' + provFechaCorta(m.fecha) + '</td><td>' + det + '</td>' +
+      '<td style="color:var(--red);font-weight:600">' + (esPago ? '—' : '$' + fmt(m.monto)) + '</td>' +
+      '<td style="color:var(--green);font-weight:600">' + (esPago ? '$' + fmt(m.monto) : '—') + '</td>' +
+      '<td style="font-weight:700">$' + fmt(x.saldo) + '</td>' +
+      '<td><button class="btn btn-sm btn-danger" onclick="eliminarMovProv(\\'' + m.id + '\\')">🗑️</button></td></tr>';
+  }).join('');
+}
+function abrirMovProv(tipo){
+  if(rolActual !== 'admin' || !cuentaProv) return;
+  document.getElementById('pmov-tipo').value = tipo || 'pago';
+  document.getElementById('pmov-monto').value = '';
+  document.getElementById('pmov-desc').value = '';
+  document.getElementById('pmov-fecha').value = fechaISO(new Date());
+  document.getElementById('pmov-medio').value = 'Efectivo';
+  document.getElementById('pmov-caja').checked = true;
+  document.getElementById('titulo-pmov').textContent = 'Movimiento con ' + cuentaProv;
+  pmovCambio();
+  document.getElementById('modal-provmov').classList.add('open');
+}
+function pmovCambio(){
+  var pago = document.getElementById('pmov-tipo').value === 'pago';
+  document.getElementById('pmov-pagoextra').style.display = pago ? 'block' : 'none';
+}
+function confirmarMovProv(){
+  if(rolActual !== 'admin' || !cuentaProv) return;
+  var tipo = document.getElementById('pmov-tipo').value;
+  var monto = parseCosto(document.getElementById('pmov-monto').value);
+  if(monto === null || monto <= 0){ alert('Ingresá un monto válido'); return; }
+  var fecha = document.getElementById('pmov-fecha').value || fechaISO(new Date());
+  var desc = document.getElementById('pmov-desc').value.trim();
+  if(!db.prov_movs) db.prov_movs = [];
+  var mov = { id: 'pv' + Date.now() + Math.random().toString(36).slice(2, 6), proveedor: cuentaProv, fecha: fecha, tipo: tipo === 'pago' ? 'pago' : 'pedido', monto: monto, desc: desc || (tipo === 'pago' ? 'Pago' : 'Deuda cargada'), creado: new Date().toISOString() };
+  if(tipo === 'pago'){
+    mov.medio = document.getElementById('pmov-medio').value;
+    if(document.getElementById('pmov-caja').checked){
+      if(!db.caja) db.caja = [];
+      var cid = nuevoIdCaja();
+      var p = fecha.split('-');
+      db.caja.push({ fecha: new Date(fecha + 'T12:00:00').toLocaleDateString('es-AR'), tipo: 'salida', medio: mov.medio, desc: 'Pago proveedor ' + cuentaProv + (desc ? ' - ' + desc : ''), monto: monto, id: cid });
+      mov.caja_id = cid;
+    }
+  }
+  db.prov_movs.push(mov);
+  registrarActividad(tipo === 'pago' ? 'pago' : 'presupuesto', (tipo === 'pago' ? 'Pagó a proveedor ' : 'Cargó deuda con proveedor ') + cuentaProv, 'Monto: $' + fmt(monto));
+  guardar().then(function(ok){ if(!ok) alert('Quedó SOLO en esta computadora: no se pudo guardar en el servidor. No refresques la página.'); });
+  cerrarModales(); renderCuentaProv();
+  try{ renderCaja(); }catch(e){}
+}
+function eliminarMovProv(id){
+  if(rolActual !== 'admin') return;
+  var m = (db.prov_movs || []).find(function(x){ return x.id === id; }); if(!m) return;
+  var msg = '¿Eliminar este ' + (m.tipo === 'pago' ? 'pago' : 'pedido') + ' de $' + fmt(m.monto) + ' de la cuenta de ' + m.proveedor + '?';
+  if(m.tipo === 'pedido') msg += ' (No cambia el stock.)';
+  if(m.caja_id) msg += ' También se saca el movimiento de Caja.';
+  if(!confirm(msg)) return;
+  db.prov_movs = db.prov_movs.filter(function(x){ return x.id !== id; });
+  if(m.caja_id) db.caja = (db.caja || []).filter(function(c){ return c.id !== m.caja_id; });
+  guardar();
+  renderCuentaProv();
+  try{ renderCaja(); }catch(e){}
+}
+function pedidoRecalc(){
+  var tot = document.getElementById('ped-total'); if(!tot || tot.dataset.manual) return;
+  var s = 0;
+  document.querySelectorAll('#lineas-pedido > div').forEach(function(row){
+    var c = parseInt(row.querySelector('.ped-cant').value, 10) || 0;
+    var ce = row.querySelector('.ped-costo'); var k = ce ? (parseCosto(ce.value) || 0) : 0;
+    s += c * k;
+  });
+  tot.value = s > 0 ? String(Math.round(s * 100) / 100).replace('.', ',') : '';
+}
+
 let pedidoProvIdx=null;
 function abrirModalPedido(provIdx){
   pedidoProvIdx=provIdx;
@@ -5296,6 +5486,9 @@ function abrirModalPedido(provIdx){
   document.getElementById('titulo-modal-pedido').textContent=\`Pedido a \${prov.nombre}\`;
   document.getElementById('ped-fecha').value=new Date().toISOString().split('T')[0];
   document.getElementById('ped-remito').value='';
+  var pt=document.getElementById('ped-total'); pt.value=''; pt.dataset.manual='';
+  document.getElementById('ped-stock').checked=true;
+  document.getElementById('ped-admin-extra').style.display = rolActual==='admin' ? 'block' : 'none';
   document.getElementById('lineas-pedido').innerHTML='';
   agregarLineaPedido();
   document.getElementById('modal-pedido').classList.add('open');
@@ -5308,15 +5501,16 @@ function agregarLineaPedido(){
     .filter(({p})=>(p.proveedor||'').toLowerCase()===prov.nombre.toLowerCase());
 
   const div=document.createElement('div');
-  div.style.cssText='display:grid;grid-template-columns:2fr 100px 36px;gap:8px;align-items:center;margin-bottom:8px';
+  div.style.cssText='display:grid;grid-template-columns:' + (rolActual==='admin' ? '2fr 90px 120px 36px' : '2fr 100px 36px') + ';gap:8px;align-items:center;margin-bottom:8px';
   div.innerHTML=\`
     <div class="ac-wrap">
       <input type="text" class="inp ped-prod-search" placeholder="Buscar producto de \${prov.nombre}..." oninput="acPedidoProd(this,\${pedidoProvIdx})" autocomplete="off" style="width:100%">
       <input type="hidden" class="ped-prod-idx">
       <div class="ac-list ped-prod-ac"></div>
     </div>
-    <input type="number" class="inp ped-cant" placeholder="Cantidad" min="1" value="1">
-    <button class="btn btn-sm btn-danger" onclick="this.closest('div').remove()" style="align-self:center">✕</button>\`;
+    <input type="number" class="inp ped-cant" placeholder="Cantidad" min="1" value="1" oninput="pedidoRecalc()">
+    \${rolActual==='admin'?'<input type="text" inputmode="decimal" class="inp ped-costo" placeholder="Costo unit. $" oninput="pedidoRecalc()">':''}
+    <button class="btn btn-sm btn-danger" onclick="this.closest('div').remove();pedidoRecalc()" style="align-self:center">✕</button>\`;
   document.getElementById('lineas-pedido').appendChild(div);
 }
 function acPedidoProd(input, provIdx){
@@ -5340,6 +5534,7 @@ function elegirPedidoProd(el,idx){
   const wrap=el.closest('.ac-wrap');
   wrap.querySelector('.ped-prod-search').value=p.nombre+(p.medida?' – '+p.medida:'');
   wrap.querySelector('.ped-prod-idx').value=idx;
+  var ce=wrap.parentNode.querySelector('.ped-costo'); if(ce&&p.costo>0){ ce.value=String(p.costo).replace('.',','); pedidoRecalc(); }
   wrap.querySelector('.ped-prod-ac').classList.remove('open');
 }
 document.addEventListener('click',e=>{
@@ -5352,15 +5547,20 @@ function confirmarPedido(){
   document.querySelectorAll('#lineas-pedido > div').forEach(row=>{
     const idxVal=row.querySelector('.ped-prod-idx').value;
     const cant=parseInt(row.querySelector('.ped-cant').value)||0;
+    const ce=row.querySelector('.ped-costo');
+    const costo=ce?(parseCosto(ce.value)||0):0;
     if(!idxVal){ok=false;return;}
-    if(cant>0) lineas.push({prodIdx:parseInt(idxVal),cant});
+    if(cant>0) lineas.push({prodIdx:parseInt(idxVal),cant,costo});
   });
   if(!ok||!lineas.length){alert('Completá al menos un producto con cantidad');return;}
   const prov=db.proveedores[pedidoProvIdx];
   const fecha=document.getElementById('ped-fecha').value;
   const remito=document.getElementById('ped-remito').value.trim();
+  const esAdmin=rolActual==='admin';
+  const sumarStock=!esAdmin||document.getElementById('ped-stock').checked;
+  const total=esAdmin?(parseCosto(document.getElementById('ped-total').value)||0):0;
   // Sumar al stock
-  lineas.forEach(({prodIdx,cant})=>{
+  if(sumarStock) lineas.forEach(({prodIdx,cant})=>{
     db.productos[prodIdx].stock=(db.productos[prodIdx].stock||0)+cant;
   });
   // Guardar historial en el proveedor
@@ -5370,8 +5570,21 @@ function confirmarPedido(){
     remito,
     lineas: lineas.map(({prodIdx,cant})=>({nombre:db.productos[prodIdx].nombre,cant}))
   });
-  guardar(); cerrarModales(); renderProveedores();
-  alert(\`✅ Stock actualizado. Se sumaron \${lineas.length} producto\${lineas.length>1?'s':''}.\`);
+  // Sumar el total a la cuenta del proveedor
+  if(esAdmin&&total>0){
+    if(!db.prov_movs) db.prov_movs=[];
+    db.prov_movs.push({
+      id:'pv'+Date.now()+Math.random().toString(36).slice(2,6), proveedor:prov.nombre,
+      fecha:fecha||fechaISO(new Date()), tipo:'pedido', monto:total,
+      desc:'Pedido'+(remito?' (remito '+remito+')':''),
+      lineas:lineas.map(({prodIdx,cant,costo})=>({nombre:db.productos[prodIdx].nombre,cant,costo})),
+      creado:new Date().toISOString()
+    });
+    registrarActividad('presupuesto','Pedido a proveedor '+prov.nombre,'Total: $'+fmt(total)+(sumarStock?' | Stock sumado':''));
+  }
+  guardar().then(function(g){ if(!g) alert('Quedó SOLO en esta computadora: no se pudo guardar en el servidor. No refresques la página.'); });
+  cerrarModales(); renderProveedores();
+  alert((sumarStock?'✅ Stock actualizado ('+lineas.length+' producto'+(lineas.length>1?'s':'')+'). ':'✅ Pedido registrado. ')+(esAdmin?(total>0?'Se sumaron $'+fmt(total)+' a la deuda con '+prov.nombre+'.':'No pusiste total, así que no se cargó deuda.'):''));
 }
 
 function eliminarMovimiento(idx){

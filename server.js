@@ -1613,21 +1613,63 @@ function avisoServidor(ok){
     document.body.appendChild(b);
   }
 }
+var snapSync = null;
+var CLAVES_REG = { presupuestos: 'numero', caja: 'id' };
+function cajaStampIds(arr){
+  var vistos = {};
+  (arr || []).forEach(function(m){
+    if(!m || m.id) return;
+    var sig = [m.fecha, m.tipo, m.medio, m.desc, m.monto].join('|');
+    vistos[sig] = (vistos[sig] || 0) + 1;
+    m.id = 'L|' + sig + '|' + vistos[sig];
+  });
+}
+function nuevoIdCaja(){ return 'm' + Date.now() + Math.random().toString(36).slice(2, 7); }
+function tomarSnapshot(){
+  cajaStampIds(db.caja);
+  snapSync = {};
+  Object.keys(db).forEach(function(t){ snapSync[t] = JSON.stringify(db[t]); });
+}
+// Arma solo lo que cambió desde la última vez que se sincronizó con el servidor
+function armarDelta(){
+  cajaStampIds(db.caja);
+  var tablas = {}, nuevoSnap = {}, hay = false;
+  Object.keys(db).forEach(function(t){
+    var js = JSON.stringify(db[t]); nuevoSnap[t] = js;
+    if(snapSync && snapSync[t] === js) return;
+    hay = true;
+    var key = CLAVES_REG[t], v = db[t];
+    var porRegistro = key && Array.isArray(v) && v.every(function(r){ return r && r[key] !== undefined && r[key] !== null; });
+    if(porRegistro && snapSync && snapSync[t] !== undefined){
+      var viejo = JSON.parse(snapSync[t]); if(!Array.isArray(viejo)) viejo = [];
+      var mv = {};
+      viejo.forEach(function(r){ if(r && r[key] !== undefined && r[key] !== null) mv[String(r[key])] = JSON.stringify(r); });
+      var ups = [], vistos = {};
+      v.forEach(function(r){ var k = String(r[key]); vistos[k] = 1; if(mv[k] !== JSON.stringify(r)) ups.push(r); });
+      var dels = Object.keys(mv).filter(function(k){ return !vistos[k]; });
+      tablas[t] = { mode: 'records', key: key, upserts: ups, deletes: dels };
+    } else tablas[t] = { mode: 'whole', valor: v };
+  });
+  return { hay: hay, tablas: tablas, nuevoSnap: nuevoSnap };
+}
 async function guardar() {
   // 1. Siempre guardar en local primero
   localStorage.setItem('hap_db', JSON.stringify(db));
   // 2. Subir al servidor (nunca si no pudimos leer lo que hay: se pisarian datos nuevos con viejos)
   if(servidorConectado === false){ ultimoGuardadoOk = false; return false; }
+  if(snapSync === null){ ultimoGuardadoOk = false; return false; }
+  const delta = armarDelta();
+  if(!delta.hay){ ultimoGuardadoOk = true; return true; }
   guardandoEnServidor = true;
   let guardadoOk = false;
   try {
-    const res = await fetch(\`\${API}/api/db/all\`, {
+    const res = await fetch(\`\${API}/api/db/delta\`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(db)
+      body: JSON.stringify({ tables: delta.tablas })
     });
     if(!res.ok) console.warn('Error servidor:', res.status);
-    else { console.log('✅ Guardado en servidor'); guardadoOk = true; }
+    else { console.log('✅ Guardado en servidor'); guardadoOk = true; snapSync = delta.nuevoSnap; }
   } catch(e) {
     console.warn('Sin internet, solo local');
   } finally {
@@ -1646,6 +1688,8 @@ async function cargarDesdeServidor() {
     if(!res.ok){ avisoServidor(false); return; }
     const data = await res.json();
     avisoServidor(true);
+    // Si hay cambios mios que todavia no llegaron al servidor, no los piso con lo que baje
+    if(snapSync !== null && armarDelta().hay) return;
     if(data && data.productos && data.productos.length > 0) {
       // El servidor tiene datos reales — usarlos completos
       db = data;
@@ -1659,11 +1703,13 @@ async function cargarDesdeServidor() {
       if(!db.controles_stock) db.controles_stock = [];
       if(!db.cierres) db.cierres = [];
       ordenarDatos();
+      tomarSnapshot();
       localStorage.setItem('hap_db', JSON.stringify(db));
       console.log('✅ Datos del servidor cargados');
     } else {
       // Servidor vacío — subir los datos locales al servidor
       console.log('⬆️ Servidor vacío, subiendo datos locales...');
+      snapSync = {};
       await guardar();
     }
   } catch(e) {
@@ -4450,7 +4496,7 @@ function abrirModalMovimiento(){
   document.getElementById('mov-fecha').value=new Date().toISOString().split('T')[0];
   document.getElementById('mov-tipo').value='entrada';
 }
-function guardarMovimiento(){
+async function guardarMovimiento(){
   const monto=parseFloat(document.getElementById('mov-monto').value)||0;
   const desc=document.getElementById('mov-desc').value.trim();
   if(!monto||monto<=0){alert('Ingresá un monto');return;}
@@ -4461,9 +4507,11 @@ function guardarMovimiento(){
     fecha: fechaVal ? new Date(fechaVal+'T12:00:00').toLocaleDateString('es-AR') : new Date().toLocaleDateString('es-AR'),
     tipo: document.getElementById('mov-tipo').value,
     medio: document.getElementById('mov-medio').value,
-    desc, monto
+    desc, monto, id: nuevoIdCaja()
   });
-  guardar(); cerrarModales(); renderCaja();
+  cerrarModales(); renderCaja();
+  const okMov = await guardar();
+  if(!okMov) alert('El movimiento se cargó SOLO en esta computadora: no se pudo guardar en el servidor. No refresques la página; se reintenta solo cada 30 segundos.');
 }
 function parseFechaAR(s){
   if(!s)return null;
@@ -5329,7 +5377,7 @@ function confirmarPedido(){
 function eliminarMovimiento(idx){
   if(rolActual!=='admin'){ alert('No tenés permiso para eliminar movimientos de caja.'); return; }
   if(!confirm('¿Eliminar este movimiento de la caja?'))return;
-  db.caja.splice(idx,1); guardar(); renderCaja();
+  db.caja.splice(idx,1); renderCaja(); guardar().then(function(ok){ if(!ok) alert('No se pudo guardar en el servidor. No refresques la página; se reintenta solo.'); });
 }
 
 // ---- GANANCIA ----
@@ -6029,6 +6077,14 @@ setInterval(async () => {
   if(!rolActual) return; // solo si está logueado
   if(guardandoEnServidor) return; // no interferir si se está guardando
   if(planillaSucia || listasSucia || pgSucia || csSucio || cgSucio) return; // no pisar una planilla de costos con cambios sin guardar
+  if(snapSync !== null && armarDelta().hay){
+    // hay cambios que no llegaron al servidor: reintentar antes de bajar nada (si no, se perderian)
+    var okRe = await guardar();
+    if(!okRe){
+      try{ var rh = await fetch(API + '/health'); if(rh.ok && servidorConectado === false) avisoServidor(true); }catch(e){}
+      return;
+    }
+  }
   await cargarDesdeServidor();
   try {
     const secActiva = document.querySelector('.section.active')?.id;
@@ -6070,8 +6126,69 @@ app.get('/api/db/all', async (req, res) => {
     if (error) { console.error('GET error:', error); return res.status(500).json({ error: error.message }); }
     const result = {};
     (data||[]).forEach(row => { result[row.tabla] = row.valor; });
+    if(Array.isArray(result.caja)) cajaStampIds(result.caja);
     res.json(result);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ---- Guardado por cambios (delta): cada compu manda solo lo que cambio y el servidor lo aplica sobre lo ultimo que hay ----
+function cajaStampIds(arr){
+  const vistos = {};
+  (arr || []).forEach(m => {
+    if(!m || m.id) return;
+    const sig = [m.fecha, m.tipo, m.medio, m.desc, m.monto].join('|');
+    vistos[sig] = (vistos[sig] || 0) + 1;
+    m.id = 'L|' + sig + '|' + vistos[sig];
+  });
+}
+function aplicarDelta(actual, d){
+  const key = d.key, mapa = {}, orden = [];
+  (Array.isArray(actual) ? actual : []).forEach(r => {
+    if(!r || r[key] === undefined || r[key] === null) return;
+    const k = String(r[key]); if(!(k in mapa)) orden.push(k); mapa[k] = r;
+  });
+  (d.deletes || []).forEach(k => { delete mapa[String(k)]; });
+  (d.upserts || []).forEach(r => {
+    const k = String(r[key]); if(!(k in mapa)) orden.push(k); mapa[k] = r;
+  });
+  return orden.filter(k => k in mapa).map(k => mapa[k]);
+}
+async function leerTabla(t){
+  const { data, error } = await supabase.from('hap_data').select('valor').eq('tabla', t).maybeSingle();
+  if(error) throw new Error(error.message);
+  return data ? data.valor : null;
+}
+async function escribirTabla(t, v){
+  const { error } = await supabase.from('hap_data').upsert({ tabla: t, valor: v }, { onConflict: 'tabla' });
+  if(error) throw new Error(error.message);
+}
+let dbLock = Promise.resolve();
+function conLock(fn){ const p = dbLock.then(fn, fn); dbLock = p.catch(() => {}); return p; }
+app.post('/api/db/delta', async (req, res) => {
+  try {
+    const tables = (req.body && req.body.tables) || {};
+    await conLock(async () => {
+      for(const t of Object.keys(tables)){
+        const d = tables[t] || {};
+        if(d.mode === 'records'){
+          const actual = await leerTabla(t);
+          if(t === 'caja') cajaStampIds(actual);
+          await escribirTabla(t, aplicarDelta(actual, d));
+        } else if(t === 'contador'){
+          const actual = (await leerTabla(t)) || {};
+          const nuevo = Object.assign({}, d.valor || {});
+          Object.keys(actual).forEach(k => {
+            if(typeof actual[k] === 'number' && typeof nuevo[k] === 'number') nuevo[k] = Math.max(actual[k], nuevo[k]);
+            else if(nuevo[k] === undefined) nuevo[k] = actual[k];
+          });
+          await escribirTabla(t, nuevo);
+        } else {
+          await escribirTabla(t, d.valor);
+        }
+      }
+    });
+    res.json({ ok: true });
+  } catch (e) { console.error('delta error:', e.message); res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/db/all', async (req, res) => {

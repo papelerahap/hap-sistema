@@ -1,5 +1,4 @@
 const express = require('express');
-const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
@@ -7,10 +6,20 @@ const PORT = process.env.PORT || 10000;
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qfrmfwtgnjzlawhhwmnp.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || 'sb_publishable_deCqDep8bLWg7H34xlfalA_Z8euE7q4';
+if(!process.env.SUPABASE_KEY) console.warn('ATENCION: falta la variable SUPABASE_KEY en Render; se esta usando la clave que esta escrita en el codigo.');
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-app.use(cors());
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
 app.use(express.json({ limit: '50mb' }));
 
 const HTML = `<!DOCTYPE html>
@@ -219,7 +228,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
 <body>
 
 <!-- LOGIN -->
-<script type="application/json" id="db-defaults-data">{"actividad": [{"hora": "08:07 p. m.", "tipo": "presupuesto", "fecha": "20/8/2026", "accion": "Creó boleta #547441", "detalle": "Cliente: La Rotonda | Total: $22.479,60", "usuario": "Hugo"}, {"hora": "08:05 p. m.", "tipo": "presupuesto", "fecha": "20/8/2026", "accion": "Creó boleta #547440", "detalle": "Cliente: Edu Car Darragueira | Total: $13.372,00", "usuario": "Admin"}, {"hora": "02:54 p. m.", "tipo": "presupuesto", "fecha": "23/7/2026", "accion": "Creó boleta #547439", "detalle": "Cliente: Empanadas Gustavo | Total: $1.070.208,00", "usuario": "Admin"}, {"hora": "10:32 p. m.", "tipo": "presupuesto", "fecha": "22/7/2026", "accion": "Creó boleta #547438", "detalle": "Cliente: Buen corte | Total: $141.956,00", "usuario": "mauri"}, {"hora": "10:16 p. m.", "tipo": "pago", "fecha": "22/7/2026", "accion": "Registró pago en boleta #547437", "detalle": "Cliente: Buen corte | Monto: $99.000,00 | Forma: Efectivo", "usuario": "Mauri"}], "contador": {"presupuesto": 547442}, "proveedores": [{"dir": "", "tel": "", "email": "", "notas": "", "nombre": "Kohut", "contacto": ""}, {"dir": "", "tel": "", "email": "", "notas": "", "nombre": "Mapsa", "contacto": ""}, {"dir": "", "tel": "", "email": "", "notas": "", "nombre": "Lenci", "contacto": ""}, {"dir": "", "tel": "", "email": "", "notas": "", "nombre": "Walter", "contacto": ""}, {"dir": "", "tel": "", "email": "", "notas": "", "nombre": "Roll paper", "contacto": ""}], "caja": [{"desc": "Cobro boleta #547437 — Buen corte", "tipo": "entrada", "fecha": "22/7/2026", "medio": "Efectivo", "monto": 99000}], "config": {"dir": "Renefavaloro 4933", "iva": "Responsable Inscripto", "pie": "Precios sujetos a variación sin previo aviso. DOCUMENTO NO VÁLIDO COMO FACTURA.", "tel": "1160089998", "cuit": "", "dias": 15, "email": "", "filas": 12, "nombre": "Distribuidora HAP", "password": "2329"}, "productos": [{"costo": 1451.1, "stock": 0, "codigo": "0001", "medida": "30x40cm blanca x100", "minimo": 5, "nombre": "Cam. 30x40 blanca x100", "precio": 0, "unidad": "paquete", "categoria": "Bolsas camiseta", "proveedor": "Mapsa"}, {"costo": 1516.48, "stock": 0, "codigo": "0002", "medida": "40x50cm color Eco", "minimo": 5, "nombre": "Cam. 40x50 color Eco", "precio": 0, "unidad": "paquete", "categoria": "Bolsas camiseta", "proveedor": "Mapsa"}, {"costo": 2434.73, "stock": 0, "codigo": "0003", "medida": "40x50cm blanca x100", "minimo": 5, "nombre": "Cam. 40x50 blanca x100", "precio": 0, "unidad": "paquete", "categoria": "Bolsas camiseta", "proveedor": "Mapsa"}, {"costo": 4692.22, "stock": 0, "codigo": "0004", "medida": "45x55cm verde x100", "minimo": 5, "nombre": "Cam. 45x55 verde x100", "precio": 0, "unidad": "paquete", "categoria": "Bolsas camiseta", "proveedor": "Mapsa"}, {"costo": 4692.22, "stock": 0, "codigo": "0005", "medida": "45x55cm negra x100", "minimo": 5, "nombre": "Cam. 45x55 negra x100", "precio": 0, "unidad": "paquete", "categoria": "Bolsas camiseta", "proveedor": "Mapsa"}, {"costo": 3895.53, "stock": 0, "codigo": "0006", "medida": "45x60cm blanca x100", "minimo": 5, "nombre": "Cam. 45x60 blanca x100", "precio": 0, "unidad": "paquete", "categoria": "Bolsas camiseta", "proveedor": "Mapsa"}, {"costo": 10500, "stock": 1346, "codigo": "0007", "medida": "13x13cm", "minimo": 5, "nombre": "Rollo 13x13", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Kohut"}, {"costo": 10500, "stock": 0, "codigo": "0008", "medida": "15x15cm", "minimo": 5, "nombre": "Rollo 15x15", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Kohut"}, {"costo": 0, "stock": 0, "codigo": "0009", "medida": "15x20cm", "minimo": 5, "nombre": "Rollo 15x20", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Kohut"}, {"costo": 1900.22, "stock": 0, "codigo": "0010", "medida": "15x25cm", "minimo": 5, "nombre": "Rollo 15x25", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Mapsa"}, {"costo": 2862.16, "stock": 0, "codigo": "0011", "medida": "20x30cm", "minimo": 5, "nombre": "Rollo 20x30", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Mapsa"}, {"costo": 4007, "stock": 0, "codigo": "0012", "medida": "25x35cm", "minimo": 5, "nombre": "Rollo 25x35", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Mapsa"}, {"costo": 6266.34, "stock": 0, "codigo": "0013", "medida": "30x40cm", "minimo": 5, "nombre": "Rollo 30x40", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Mapsa"}, {"costo": 5151.82, "stock": 0, "codigo": "0014", "medida": "35x45cm", "minimo": 5, "nombre": "Rollo 35x45", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Mapsa"}, {"costo": 6668.81, "stock": 0, "codigo": "0015", "medida": "40x50cm", "minimo": 5, "nombre": "Rollo 40x50", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Kohut"}, {"costo": 6982.92, "stock": 0, "codigo": "0016", "medida": "45x60cm", "minimo": 5, "nombre": "Rollo 45x60", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Walter"}, {"costo": 6668.81, "stock": 0, "codigo": "0017", "medida": "50x70cm", "minimo": 5, "nombre": "Rollo 50x70", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Kohut"}, {"costo": 7832.97, "stock": 0, "codigo": "0018", "medida": "1,5kg 20x30cm", "minimo": 5, "nombre": "Rollo 1,5kg 20x30 M", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Mapsa"}, {"costo": 7832.97, "stock": 0, "codigo": "0019", "medida": "1,5kg 25x35cm", "minimo": 5, "nombre": "Rollo 1,5kg 25x35 M", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Mapsa"}, {"costo": 7832.97, "stock": 0, "codigo": "0020", "medida": "1,5kg 35x45cm", "minimo": 5, "nombre": "Rollo 1,5kg 35x45 M", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Mapsa"}, {"costo": 7832.97, "stock": 0, "codigo": "0021", "medida": "1,5kg 40x50cm", "minimo": 5, "nombre": "Rollo 1,5kg 40x50 M", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Mapsa"}, {"costo": 7832.97, "stock": 0, "codigo": "0022", "medida": "1,5kg 45x60cm", "minimo": 5, "nombre": "Rollo 1,5kg 45x60 M", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Mapsa"}, {"costo": 7832.97, "stock": 0, "codigo": "0023", "medida": "1,5kg 50x70cm", "minimo": 5, "nombre": "Rollo 1,5kg 50x70 M", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Mapsa"}, {"costo": 12625, "stock": 0, "codigo": "0025", "medida": "Blanco x50", "minimo": 5, "nombre": "Cons. Blanco x50", "precio": 0, "unidad": "paquete", "categoria": "Bolsas de residuos", "proveedor": "Kohut"}, {"costo": 0, "stock": 0, "codigo": "0026", "medida": "Negro 50x70cm", "minimo": 5, "nombre": "Cons. Negro 50x70", "precio": 0, "unidad": "paquete", "categoria": "Bolsas de residuos", "proveedor": "Walter"}, {"costo": 1162.274, "stock": 0, "codigo": "0027", "medida": "Negro 60x90cm", "minimo": 5, "nombre": "Cons. Negro 60x90", "precio": 0, "unidad": "paquete", "categoria": "Bolsas de residuos", "proveedor": "Kohut"}, {"costo": 1749.42, "stock": 0, "codigo": "0028", "medida": "Negro 80x110cm", "minimo": 5, "nombre": "Cons. Negro 80x110", "precio": 0, "unidad": "paquete", "categoria": "Bolsas de residuos", "proveedor": "Kohut"}, {"costo": 2905.68, "stock": 0, "codigo": "0029", "medida": "Negro 90x120cm", "minimo": 5, "nombre": "Cons. Negro 90x120", "precio": 0, "unidad": "paquete", "categoria": "Bolsas de residuos", "proveedor": "Kohut"}, {"costo": 5468.75, "stock": 0, "codigo": "0030", "medida": "Troquelado Rojo 35x45cm", "minimo": 5, "nombre": "Kg. Troq. Rojo 35x45", "precio": 0, "unidad": "kg", "categoria": "Otro", "proveedor": "Kohut"}, {"costo": 5468.75, "stock": 0, "codigo": "0031", "medida": "Troquelado Rojo 45x60cm", "minimo": 5, "nombre": "Kg. Torq. Rojo 45x60", "precio": 0, "unidad": "kg", "categoria": "Otro", "proveedor": "Kohut"}, {"costo": 15340, "stock": 0, "codigo": "0032", "medida": "x100", "minimo": 5, "nombre": "Bolsas Cajon x100", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Kohut"}, {"costo": 0, "stock": 0, "codigo": "0033", "medida": "Cristal 35x45cm", "minimo": 5, "nombre": "Rollo Cristal 35x45", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Lenci"}, {"costo": 0, "stock": 0, "codigo": "0034", "medida": "Cristal 45x60cm", "minimo": 5, "nombre": "Rollo Cristal 45x60", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Lenci"}, {"costo": 1262.5, "stock": 0, "codigo": "0035", "medida": "Cristal 70x110cm", "minimo": 5, "nombre": "Bolsas Cristal 70x110", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Lenci"}, {"costo": 0, "stock": 0, "codigo": "0036", "medida": "Cristal 45x90cm", "minimo": 5, "nombre": "Bolsas Cristal 45x90", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Lenci"}, {"costo": 8073.68, "stock": 0, "codigo": "0037", "medida": "Cristal 58x90cm", "minimo": 5, "nombre": "Bolsas Cristal 58x90", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Kohut"}, {"costo": 5790.51, "stock": 0, "codigo": "0038", "medida": "38 max", "minimo": 5, "nombre": "Film 38 max", "precio": 0, "unidad": "unidad", "categoria": "Film stretch", "proveedor": "Walter"}, {"costo": 7341.63, "stock": 0, "codigo": "0039", "medida": "615 x100", "minimo": 5, "nombre": "Bandeja 615 x100", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 3752.5, "stock": 0, "codigo": "0040", "medida": "617 x100", "minimo": 5, "nombre": "Bandeja 617 x100", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 5383.9, "stock": 0, "codigo": "0041", "medida": "618 x100", "minimo": 5, "nombre": "Bandeja 618 x100", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 7178.52, "stock": 0, "codigo": "0042", "medida": "619 x100", "minimo": 5, "nombre": "Bandeja 619 x100", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 10604.69, "stock": 0, "codigo": "0043", "medida": "625 x100", "minimo": 5, "nombre": "Bandeja 625 x100", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 605.77, "stock": 0, "codigo": "0044", "medida": "24x100", "minimo": 5, "nombre": "Cinta 24x100", "precio": 0, "unidad": "unidad", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 797.53, "stock": 0, "codigo": "0045", "medida": "48x100", "minimo": 5, "nombre": "Cinta 48x100", "precio": 0, "unidad": "unidad", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 2261, "stock": 0, "codigo": "0046", "medida": "57x20cm", "minimo": 5, "nombre": "R. Termico 57x20", "precio": 3380, "unidad": "rollo", "categoria": "Otro", "proveedor": "Roll paper"}, {"costo": 3283, "stock": 0, "codigo": "0047", "medida": "57x30cm", "minimo": 5, "nombre": "R. Termico 57x30", "precio": 4900, "unidad": "rollo", "categoria": "Otro", "proveedor": "Roll paper"}, {"costo": 4784, "stock": 0, "codigo": "0048", "medida": "57x30cm con buje", "minimo": 5, "nombre": "R. Termico 57x30 buje", "precio": 6980, "unidad": "rollo", "categoria": "Otro", "proveedor": "Roll paper"}, {"costo": 4575, "stock": 0, "codigo": "0049", "medida": "80x30cm", "minimo": 5, "nombre": "R. Termico 80x30", "precio": 6820, "unidad": "rollo", "categoria": "Otro", "proveedor": "Roll paper"}, {"costo": 11953.04, "stock": 0, "codigo": "0050", "medida": "400 metros", "minimo": 5, "nombre": "Bob. Papel 19x400 mtrs.", "precio": 0, "unidad": "unidad", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 11704.94, "stock": 0, "codigo": "0051", "medida": "24x50", "minimo": 5, "nombre": "Higienico Ele. 24x50", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 10627.68, "stock": 0, "codigo": "0052", "medida": "8x3", "minimo": 5, "nombre": "Cocina Ele. 8x3", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 19118.8, "stock": 0, "codigo": "0053", "medida": "35x45cm", "minimo": 5, "nombre": "Papel Sulfito 35x45", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 19118.8, "stock": 0, "codigo": "0054", "medida": "40x50cm", "minimo": 5, "nombre": "Papel Sulfito 40x50", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 19118.8, "stock": 0, "codigo": "0055", "medida": "50x70cm", "minimo": 5, "nombre": "Papel Sulfito 50x70", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 0, "stock": 0, "codigo": "0056", "medida": "25x35cm", "minimo": 5, "nombre": "Kg. Folex 25x35", "precio": 0, "unidad": "kg", "categoria": "Otro", "proveedor": "Lenci"}, {"costo": 7224.75, "stock": 0, "codigo": "0057", "medida": "25x40cm", "minimo": 5, "nombre": "Kg. Folex 25x40", "precio": 0, "unidad": "kg", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 8543.89, "stock": 0, "codigo": "", "medida": "1,5kg 20x30cm", "minimo": 5, "nombre": "Rollo 1,5kg 20x30 R", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Kohut"}, {"costo": 8543.89, "stock": 0, "codigo": "", "medida": "1,5kg 25x35cm", "minimo": 5, "nombre": "Rollo 1,5kg 25x35 R", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Kohut"}, {"costo": 8543.89, "stock": 0, "codigo": "", "medida": "1,5kg 35x45cm", "minimo": 5, "nombre": "Rollo 1,5kg 35x45 R", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Kohut"}, {"costo": 8543.89, "stock": 0, "codigo": "", "medida": "1,5kg 40x50cm", "minimo": 5, "nombre": "Rollo 1,5kg 40x50 R", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Kohut"}, {"costo": 8543.89, "stock": 0, "codigo": "", "medida": "1,5kg 45x60cm", "minimo": 5, "nombre": "Rollo 1,5kg 45x60 R", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Kohut"}, {"costo": 8543.89, "stock": 0, "codigo": "", "medida": "1,5kg 50x70cm", "minimo": 5, "nombre": "Rollo 1,5kg 50x70 R", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Kohut"}, {"costo": 8543.89, "stock": 0, "codigo": "", "medida": "1,5kg 60x90cm", "minimo": 5, "nombre": "Rollo 1,5kg 60x90 R", "precio": 0, "unidad": "rollo", "categoria": "Rollos polietileno", "proveedor": "Kohut"}, {"costo": 2945.48, "stock": 0, "codigo": "", "medida": "103 Rect. x50", "minimo": 5, "nombre": "Bandeja 103 Rect. x50", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 4056.98, "stock": 0, "codigo": "", "medida": "105 Oval x50", "minimo": 5, "nombre": "Bandeja 105 Oval x50", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 8276.2, "stock": 0, "codigo": "", "medida": "1000gr", "minimo": 5, "nombre": "Bandita Elastica 1000gr", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 6709.7, "stock": 0, "codigo": "", "medida": "L x100", "minimo": 5, "nombre": "Guantes Nitrilo L x100", "precio": 0, "unidad": "unidad", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 6709.7, "stock": 0, "codigo": "", "medida": "M x100", "minimo": 5, "nombre": "Guantes Nitrilo M x100", "precio": 0, "unidad": "unidad", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 6709.7, "stock": 0, "codigo": "", "medida": "S x100", "minimo": 5, "nombre": "Guantes Nitrilo S x100", "precio": 0, "unidad": "unidad", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 6709.7, "stock": 0, "codigo": "", "medida": "XL x100", "minimo": 5, "nombre": "Guantes Nitrilo XL x100", "precio": 0, "unidad": "unidad", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 22263.98, "stock": 0, "codigo": "", "medida": "30cm x1000mts", "minimo": 5, "nombre": "Resifilm 30x1000", "precio": 0, "unidad": "rollo", "categoria": "Film stretch", "proveedor": "Walter"}, {"costo": 15420.38, "stock": 0, "codigo": "", "medida": "38cm x500mts", "minimo": 5, "nombre": "Resifilm 38x500", "precio": 0, "unidad": "rollo", "categoria": "Film stretch", "proveedor": "Walter"}, {"costo": 30413.48, "stock": 0, "codigo": "", "medida": "38cm x1000mts", "minimo": 5, "nombre": "Resifilm 38x1000", "precio": 0, "unidad": "rollo", "categoria": "Film stretch", "proveedor": "Walter"}, {"costo": 33095.1, "stock": 0, "codigo": "", "medida": "45cm x1000mts", "minimo": 5, "nombre": "Resifilm 45x1000", "precio": 0, "unidad": "rollo", "categoria": "Film stretch", "proveedor": "Walter"}, {"costo": 619.67, "stock": 0, "codigo": "", "medida": "x1", "minimo": 5, "nombre": "Talonario Presup. Chico", "precio": 0, "unidad": "unidad", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 4602.5, "stock": 0, "codigo": "", "medida": "220cc x100", "minimo": 5, "nombre": "Vasos 220cc Light x100", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 5964.34, "stock": 0, "codigo": "", "medida": "330cc x100", "minimo": 5, "nombre": "Vasos 330cc x100", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 9748.14, "stock": 0, "codigo": "", "medida": "1000cc x50", "minimo": 5, "nombre": "Vasos 1 litro x50", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 4165.09, "stock": 0, "codigo": "", "medida": "500gr", "minimo": 5, "nombre": "Bandita Elastica 500gr", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 6813.5, "stock": 0, "codigo": "", "medida": "x10", "minimo": 5, "nombre": "Numero Caracol x10", "precio": 0, "unidad": "unidad", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 6719.24, "stock": 0, "codigo": "", "medida": "chico x50", "minimo": 5, "nombre": "Pote Bisagra Chico x50", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 6719.24, "stock": 0, "codigo": "", "medida": "mediano x50", "minimo": 5, "nombre": "Pote Bisagra Mediano x50", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 6886.56, "stock": 0, "codigo": "", "medida": "1/4 x100", "minimo": 5, "nombre": "Potes 1/4 sin tapa x100", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 6112.78, "stock": 0, "codigo": "", "medida": "1/8 x100", "minimo": 5, "nombre": "Potes 1/8 sin tapa x100", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 4023.61, "stock": 0, "codigo": "", "medida": "1/8,1/4,1/2 x100", "minimo": 5, "nombre": "Potes tapas x100", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 14924.07, "stock": 0, "codigo": "", "medida": "22x400mts", "minimo": 5, "nombre": "Bob. Papel 22x400 mtrs.", "precio": 0, "unidad": "rollo", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 6613.43, "stock": 0, "codigo": "", "medida": "27x32 x1000", "minimo": 5, "nombre": "Servilletas 27x32 x1000", "precio": 0, "unidad": "paquete", "categoria": "Otro", "proveedor": "Walter"}, {"costo": 139.87, "stock": 0, "codigo": "", "medida": "Aluminio P-17", "minimo": 5, "nombre": "Provoletera", "precio": 0, "unidad": "unidad", "categoria": "Otro", "proveedor": "Walter"}], "clientes": [{"dir": "Mazza 2696", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Polvorines", "codigo": "", "nombre": "Edu Car Darragueira"}, {"dir": "Rivadavia 2596", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Polvorines", "codigo": "", "nombre": "Angel"}, {"dir": "Talcahuano 3211", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Polvorines", "codigo": "", "nombre": "Martina 1"}, {"dir": "Talcahuano 3211", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Polvorines", "codigo": "", "nombre": "Fiambreria"}, {"dir": "General savio 3406", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Polvorines", "codigo": "G", "nombre": "Buen corte", "lista_precio": "Gloria"}, {"dir": "General savio 3457", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Polvorines", "codigo": "", "nombre": "Martina 2"}, {"dir": "Remedios de escalada 3536", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Polvorines", "codigo": "G", "nombre": "Mini car", "lista_precio": "Gloria"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Polvorines", "codigo": "", "nombre": "Ling Diego"}, {"dir": "General lavalleja 3297", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: El talar", "codigo": "", "nombre": "MyL"}, {"dir": "Av. del Libertador Gral. San Martín 2149", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Villa de mayo", "codigo": "G", "nombre": "Corte fino", "lista_precio": "Gloria"}, {"dir": "Almirante brown 1643", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Don torcuato", "codigo": "G", "nombre": "Frigo 1", "lista_precio": "Gloria"}, {"dir": "Derqui 1051", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Adolfo Sourdeaux", "codigo": "G", "nombre": "El palacio", "lista_precio": "Gloria"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "", "codigo": "", "nombre": "El rey"}, {"dir": "Derqui 1398", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Adolfo Sourdeaux", "codigo": "G", "nombre": "La Excelencia", "lista_precio": "Gloria"}, {"dir": "Juan francisco segui 1496", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Grand Bourg", "codigo": "G", "nombre": "Carnes Grand bourg", "lista_precio": "Gloria"}, {"dir": "Juan Francisco Seguí 1579", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Grand Bourg", "codigo": "G", "nombre": "Nuevo Anden", "lista_precio": "Gloria"}, {"dir": "Juan Francisco Seguí 2877", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Tortuguitas", "codigo": "G", "nombre": "Campero", "lista_precio": "Gloria"}, {"dir": "Jose de san martin 1343", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Grand Bourg", "codigo": "", "nombre": "Simon"}, {"dir": "Av. Eva duarte de peron 1287", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Grand Bourg", "codigo": "G", "nombre": "La Rotonda", "lista_precio": "Gloria"}, {"dir": "Pasco 818", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Grand Bourg", "codigo": "G", "nombre": "Ternerita", "lista_precio": "Gloria"}, {"dir": "Av. Sesquicentenario 663", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Polvorines", "codigo": "G", "nombre": "Carnes 197", "lista_precio": "Gloria"}, {"dir": "Av. Pres. Hipólito Yrigoyen 1362", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Jose c paz", "codigo": "G", "nombre": "Pura Carne", "lista_precio": "Gloria"}, {"dir": "Rivadavia 71", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Jose c paz", "codigo": "G", "nombre": "Chiquita", "lista_precio": "Gloria"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Jose c paz", "codigo": "G", "nombre": "Gran via", "lista_precio": "Gloria"}, {"dir": "Florida 1866", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Jose c paz", "codigo": "G", "nombre": "Carnes argentina", "lista_precio": "Gloria"}, {"dir": "Av. Hector arregui 1943", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Jose c paz", "codigo": "", "nombre": "Edu jose c paz"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Frino", "codigo": "G", "nombre": "Carnes Frino", "lista_precio": "Gloria"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "", "codigo": "G", "nombre": "Los Monchos", "lista_precio": "Gloria"}, {"dir": "Av. Croacia 304", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Jose c paz", "codigo": "G", "nombre": "La economia", "lista_precio": "Gloria"}, {"dir": "Av. Croacia 899", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Jose c paz", "codigo": "G", "nombre": "San nicolas", "lista_precio": "Gloria"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "", "codigo": "", "nombre": "Croacia Cristian"}, {"dir": "Av. Croacia 2394", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Jose c paz", "codigo": "G", "nombre": "La ideal", "lista_precio": "Gloria"}, {"dir": "Av. Croacia 1915", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Jose c paz", "codigo": "G", "nombre": "Frigo 2", "lista_precio": "Gloria"}, {"dir": "Potosi 5206", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Jose c paz", "codigo": "G", "nombre": "Modelo", "lista_precio": "Gloria"}, {"dir": "Av. Saavedra lamas 6699", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Cuartel v", "codigo": "G", "nombre": "Lamas", "lista_precio": "Gloria"}, {"dir": "Av. Hipolito yrigoyen 9551", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Cuartel v", "codigo": "G", "nombre": "Cuartel V", "lista_precio": "Gloria"}, {"dir": "Av. Hipolito yrigoyen 10248", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Cuartel v", "codigo": "G", "nombre": "Ruta 24", "lista_precio": "Gloria"}, {"dir": "Av. Jose altube 1879", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Jose c paz", "codigo": "", "nombre": "La central", "lista_precio": "Gloria"}, {"dir": "Concejal Tribulato 1090", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San miguel", "codigo": "", "nombre": "Tuti Fruti", "lista_precio": "Gloria"}, {"dir": "Jose francisco segui 144", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Pablo nogues", "codigo": "L", "nombre": "Segui", "lista_precio": "Luis"}, {"dir": "Juan Francisco Seguí 1592", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Malvinas argentina", "codigo": "G", "nombre": "Mercado de carnes", "lista_precio": "Gloria"}, {"dir": "Av. Dr. Ricardo Balbín 20", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San miguel", "codigo": "G", "nombre": "Corte maestro", "lista_precio": "Gloria"}, {"dir": "Pres. peron 9728", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Once de septiembre", "codigo": "G", "nombre": "Fri car Jr", "lista_precio": "Gloria"}, {"dir": "Av. Eva Perón 9772", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Loma hermosa", "codigo": "G", "nombre": "Ruta 8", "lista_precio": "Gloria"}, {"dir": "1 de mayo 964", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Loma hermosa", "codigo": "G", "nombre": "24 de marzo", "lista_precio": "Gloria"}, {"dir": "Av. 113 7090", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Loma hermosa", "codigo": "G", "nombre": "La Popular", "lista_precio": "Gloria"}, {"dir": "Jose leon suarez 7198", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Jose leon suarez", "codigo": "", "nombre": "Frig. Diagonal"}, {"dir": "Av. Brig. Gral. Juan Manuel de Rosas 2570", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Jose leon suarez", "codigo": "G", "nombre": "Todo carne", "lista_precio": "Gloria"}, {"dir": "Washington 2827", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Jose leon suarez", "codigo": "G", "nombre": "El Superior", "lista_precio": "Gloria"}, {"dir": "Moisés Lebensohn 34", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Boulogne", "codigo": "G", "nombre": "Carnes Boulogne", "lista_precio": "Gloria"}, {"dir": "Paraná 6340", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Villa adelina", "codigo": "G", "nombre": "Don luis", "lista_precio": "Gloria"}, {"dir": "Luis maria saavedra 2354", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Villa maipu", "codigo": "G", "nombre": "Empanadas Gustavo", "lista_precio": "Gloria"}, {"dir": "Saitta 3167", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San martin", "codigo": "G", "nombre": "Libertador", "lista_precio": "Gloria"}, {"dir": "2025 Granadero Fco. González", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San martin", "codigo": "G", "nombre": "Ramada", "lista_precio": "Gloria"}, {"dir": "Moreno 3825", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San martin", "codigo": "G", "nombre": "Carnes del campo", "lista_precio": "Gloria"}, {"dir": "Andres ferreyra 2514", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Caseros", "codigo": "G", "nombre": "Carnes caseros", "lista_precio": "Gloria"}, {"dir": "Misiones 6530", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Palomar", "codigo": "L", "nombre": "16 de octubre", "lista_precio": "Luis"}, {"dir": "Pedro diaz 1227", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Villa tesei", "codigo": "L", "nombre": "Angus Tesei", "lista_precio": "Luis"}, {"dir": "J. Bustamante y Guevara", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: W. morris", "codigo": "", "nombre": "De los arroyos Yamela"}, {"dir": "Gral. Conrado Villegas 2201", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: W. morris", "codigo": "", "nombre": "De los arroyos 1"}, {"dir": "Gral. Conrado Villegas 2989", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: W. morris", "codigo": "L", "nombre": "Criolla", "lista_precio": "Luis"}, {"dir": "Presidente peron 2284", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San miguel", "codigo": "L", "nombre": "Ideal", "lista_precio": "Luis"}, {"dir": "Concejal Tribulato 1118", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San miguel", "codigo": "L", "nombre": "Tribulato", "lista_precio": "Luis"}, {"dir": "Bricardo balbin 1037", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San miguel", "codigo": "G", "nombre": "Carnes Emilia", "lista_precio": "Gloria"}, {"dir": "1565 Peluffo", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San miguel", "codigo": "L", "nombre": "San miguel", "lista_precio": "Luis"}, {"dir": "Fraga 1627", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San miguel", "codigo": "L", "nombre": "Promocion", "lista_precio": "Luis"}, {"dir": "Av. Pte. J. D. Perón 86", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San miguel", "codigo": "L", "nombre": "Rural", "lista_precio": "Luis"}, {"dir": "Av. Senador moron 1144", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Bella vista", "codigo": "L", "nombre": "Bella vista", "lista_precio": "Luis"}, {"dir": "Irusta 7756", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Bella vista", "codigo": "L", "nombre": "Irusta", "lista_precio": "Luis"}, {"dir": "Av. Néstor Kirchner 3750", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Trujui", "codigo": "L", "nombre": "Roca", "lista_precio": "Luis"}, {"dir": "Boulevar caveri 1309", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Trujui", "codigo": "L", "nombre": "Cervantes", "lista_precio": "Luis"}, {"dir": "Boulevar caveri 1309", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Trujui", "codigo": "L", "nombre": "Super Pollo", "lista_precio": "Luis"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San martin", "codigo": "G", "nombre": "Hereford", "lista_precio": "Gloria"}, {"dir": "Av. Dr. Ricardo Balbín 5915", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San miguel", "codigo": "L", "nombre": "19 de marzo", "lista_precio": "Luis"}, {"dir": "Int. Juan Irigoin & Av. Int. Remigio López", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San miguel", "codigo": "L", "nombre": "Irigoin", "lista_precio": "Luis"}, {"dir": "Av. Gaspar Campos 4489", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San miguel", "codigo": "L", "nombre": "Las delicias", "lista_precio": "Luis"}, {"dir": "Av. Gaspar Campos 5215", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Jose c paz", "codigo": "L", "nombre": "La primera", "lista_precio": "Luis"}, {"dir": "Buenos Aires 1120", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Tortuguitas", "codigo": "G", "nombre": "Produccion", "lista_precio": "Gloria"}, {"dir": "Hipolito yrigoyen 311", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Alberti", "codigo": "G", "nombre": "Alberti", "lista_precio": "Gloria"}, {"dir": "Hipolito yrigoyen 571", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Alberti", "codigo": "G", "nombre": "Santa Ines", "lista_precio": "Gloria"}, {"dir": "Fruntuoso diaz 700", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Garin", "codigo": "G", "nombre": "Garin", "lista_precio": "Gloria"}, {"dir": "Av. Alvear 2373", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Benavidez", "codigo": "G", "nombre": "San carlos", "lista_precio": "Gloria"}, {"dir": "Av. Alvear 2763", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Benavidez", "codigo": "G", "nombre": "Alvear", "lista_precio": "Gloria"}, {"dir": "Av. Gral. Juan Domingo Perón 5391", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Benavidez", "codigo": "G", "nombre": "San antonio", "lista_precio": "Gloria"}, {"dir": "Avenida delos constituyente 3161", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Pacheco", "codigo": "G", "nombre": "Las mellis", "lista_precio": "Gloria"}, {"dir": "Las dalias 2248", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: El Talar", "codigo": "G", "nombre": "Carnes somos", "lista_precio": "Gloria"}, {"dir": "Boulogne Sur Mer 65", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Gral. Pacheco", "codigo": "G", "nombre": "Boulong surmer", "lista_precio": "Gloria"}, {"dir": "Av. Sta. María de las Conchas 2626", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Rincón de Milberg", "codigo": "G", "nombre": "Milber", "lista_precio": "Gloria"}, {"dir": "Colón 1582", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San fernando", "codigo": "G", "nombre": "Pura Raza", "lista_precio": "Gloria"}, {"dir": "Colón 1386", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San fernando", "codigo": "G", "nombre": "Corte Supremo", "lista_precio": "Gloria"}, {"dir": "Av. Avellaneda 1932", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Virreyes", "codigo": "G", "nombre": "Carnes Avellaneda", "lista_precio": "Gloria"}, {"dir": "Av. Avellaneda 3064", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Virreyes", "codigo": "G", "nombre": "Punto Criollo", "lista_precio": "Gloria"}, {"dir": "Av. Avellaneda 3548", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Virreyes", "codigo": "G", "nombre": "Virreyes", "lista_precio": "Gloria"}, {"dir": "Av. Avellaneda 4845", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Virreyes", "codigo": "G", "nombre": "Candela", "lista_precio": "Gloria"}, {"dir": "Otto Krause 4955", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: El triangulo", "codigo": "", "nombre": "El tano"}, {"dir": "Av. Gral. Lavalle 1804", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Zarate", "codigo": "E", "nombre": "Angus Norte", "lista_precio": "Edgardo"}, {"dir": "Gral. Pinto 818", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Zarate", "codigo": "E", "nombre": "Hereford Zarate", "lista_precio": "Edgardo"}, {"dir": "Almte. Brown 246", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Zarate", "codigo": "E", "nombre": "Angus Zarate", "lista_precio": "Edgardo"}, {"dir": "Dr. Félix Pagola 153", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Zarate", "codigo": "E", "nombre": "Angus Pagola", "lista_precio": "Edgardo"}, {"dir": "Mitre 1122", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Campana", "codigo": "E", "nombre": "Angus Mitre", "lista_precio": "Edgardo"}, {"dir": "Av. Mitre 914", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Campana", "codigo": "E", "nombre": "Premium", "lista_precio": "Edgardo"}, {"dir": "Estrada 690", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Campana", "codigo": "", "nombre": "Pesca Campana"}, {"dir": "Av. Rivadavia 1013", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Campana", "codigo": "E", "nombre": "Angus Campana", "lista_precio": "Edgardo"}, {"dir": "Bartolomé Mitre 453", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Lujan", "codigo": "G", "nombre": "Mitre", "lista_precio": "Gloria"}, {"dir": "Blvd Bernardo de Irigoyen 784", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Gral. Rodriguez", "codigo": "G", "nombre": "Rodriguez", "lista_precio": "Gloria"}, {"dir": "Murillo 602", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Trujui", "codigo": "L", "nombre": "Santa Briguida", "lista_precio": "Luis"}, {"dir": "Marcos de bueno 470", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Moreno", "codigo": "L", "nombre": "La perlita", "lista_precio": "Luis"}, {"dir": "Av. Alcorta 2690", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Moreno", "codigo": "L", "nombre": "Alcorta", "lista_precio": "Luis"}, {"dir": "Pres. Domingo Faustino Sarmiento 729", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Moron", "codigo": "L", "nombre": "Sarmiento", "lista_precio": "Luis"}, {"dir": "9 de Julio 158", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Ramos mejia", "codigo": "L", "nombre": "9 de julio", "lista_precio": "Luis"}, {"dir": "Av. Maipú 3981", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Ciudadela", "codigo": "L", "nombre": "Campo chico", "lista_precio": "Luis"}, {"dir": "Av. Bartolomé Mitre 2536", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Munro", "codigo": "G", "nombre": "Todo carne Munro", "lista_precio": "Gloria"}, {"dir": "Victor vergani 585", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Pilar", "codigo": "G", "nombre": "Carnes del pilar", "lista_precio": "Gloria"}, {"dir": "Ituzaingó 515", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Pilar", "codigo": "G", "nombre": "Tradicion", "lista_precio": "Gloria"}, {"dir": "456 tucuman", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Pilar", "codigo": "L", "nombre": "Tucuman", "lista_precio": "Luis"}, {"dir": "Lorenzo lopez 684", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Pilar", "codigo": "G", "nombre": "V6", "lista_precio": "Gloria"}, {"dir": "Tomas marqués 1312", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Pilar", "codigo": "L", "nombre": "Urbano", "lista_precio": "Luis"}, {"dir": "Ituzaingo 800", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Pilar", "codigo": "L", "nombre": "Ternero angus", "lista_precio": "Luis"}, {"dir": "Avenida José Uriburu 253", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Pilar", "codigo": "", "nombre": "Avicola bataraz"}, {"dir": "Avenida de mayo 439", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Derqui", "codigo": "L", "nombre": "Avenida", "lista_precio": "Luis"}, {"dir": "Pedro Medrano 434", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Derqui", "codigo": "L", "nombre": "Medrano", "lista_precio": "Luis"}, {"dir": "Araos Alfaro 1455", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Derqui", "codigo": "L", "nombre": "Alfaro", "lista_precio": "Luis"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "", "codigo": "L", "nombre": "Briosa", "lista_precio": "Luis"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "", "codigo": "G", "nombre": "Carnes savio", "lista_precio": "Gloria"}, {"dir": "Paraguay 32", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Maquinista savio", "codigo": "", "nombre": "La fabrica"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "", "codigo": "G", "nombre": "Carnes Ontivero", "lista_precio": "Gloria"}, {"dir": "Av. Constitución 3496", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Maquinista savio", "codigo": "G", "nombre": "La reina", "lista_precio": "Gloria"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "", "codigo": "G", "nombre": "Del viso", "lista_precio": "Gloria"}, {"dir": "Av. Ing. Eduardo Maderp 1380", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Del viso", "codigo": "G", "nombre": "Titan", "lista_precio": "Gloria"}, {"dir": "Luis maria drago 10", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Tortuguitas", "codigo": "G", "nombre": "Campo Grande", "lista_precio": "Gloria"}, {"dir": "Av. Pres. Juan Domingo Perón 3337", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Polvorines", "codigo": "", "nombre": "San jorge"}, {"dir": "Av. Villanueva 1625", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Escobar", "codigo": "G", "nombre": "Villanueva", "lista_precio": "Gloria"}, {"dir": "Rivadavia 376", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Escobar", "codigo": "G", "nombre": "Angus Escobar", "lista_precio": "Gloria"}, {"dir": "Álvarez Thomas & Ruta 25", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Villa rosa", "codigo": "G", "nombre": "La 25", "lista_precio": "Gloria"}, {"dir": "Rivadavia 2425", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Villa rosa", "codigo": "G", "nombre": "Villarosa", "lista_precio": "Gloria"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Jose c paz", "codigo": "S", "nombre": "Narove Jcp"}, {"dir": "Av. Leon Gallardo 202", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Muñiz", "codigo": "", "nombre": "Cabaña Victoria"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Bella vista", "codigo": "S", "nombre": "Narove Bv"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Muñiz", "codigo": "", "nombre": "Señalada"}, {"dir": "Av. Pres. Arturo Umberto Illia 11101", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Pilar", "codigo": "G", "nombre": "Parrilla El trebol", "lista_precio": "Gloria"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "", "codigo": "", "nombre": "Granja Lali"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: San miguel", "codigo": "", "nombre": "El economico"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "", "codigo": "", "nombre": "Verd cabaña 4"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "", "codigo": "L", "nombre": "Pastura", "lista_precio": "Luis"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "", "codigo": "", "nombre": "Yiyi", "lista_precio": "Luis"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "", "codigo": "", "nombre": "Zarate"}, {"dir": "", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "", "codigo": "", "nombre": "Vuelve y hace"}], "listas_precio": {"Luis": {"Rollo 13x13": 10382, "Rollo 15x15": 10382, "Rollo 20x30": 3655.2, "Rollo 25x35": 5117.3, "Rollo 30x40": 7999, "Rollo 35x45": 6579.3, "Rollo 40x50": 7999, "Rollo 45x60": 7999, "Rollo 50x70": 7999, "Kg. Folex 25x35": 6800, "Kg. Folex 25x40": 6800, "Cons. Blanco x50": 3490, "Bolsas Cajon x100": 22088.2, "Cons. Negro 60x90": 1556, "Cons. Negro 80x110": 2520, "Cons. Negro 90x120": 2924, "Rollo Cristal 35x45": 14411, "Rollo Cristal 45x60": 14411, "Bolsas Cristal 45x90": 191568, "Bolsas Cristal 58x90": 78012, "Cam. 30x40 blanca x100": 1838.9, "Cam. 40x50 blanca x100": 3085.4, "Cam. 45x60 blanca x100": 4936.6}, "Gloria": {"Rollo 13x13": 10456, "Rollo 15x15": 10456, "Rollo 20x30": 3746.6, "Rollo 25x35": 5245.2, "Rollo 30x40": 8202.7, "Rollo 35x45": 6743.7, "Rollo 40x50": 8202.7, "Rollo 45x60": 8202.7, "Rollo 50x70": 8202.7, "Kg. Folex 25x35": 6800, "Kg. Folex 25x40": 6800, "Cons. Blanco x50": 17450, "Bolsas Cajon x100": 20080, "Cons. Negro 60x90": 1482, "Cons. Negro 80x110": 2470, "Cons. Negro 90x120": 2900, "Rollo Cristal 35x45": 14092.1, "Rollo Cristal 45x60": 14092.1, "Bolsas Cristal 45x90": 182860, "Kg. Torq. Rojo 45x60": 6469, "Kg. Troq. Rojo 35x45": 6469, "Cam. 30x40 blanca x100": 1838.9, "Cam. 40x50 blanca x100": 3162.6, "Cam. 45x60 blanca x100": 5060}, "Edgardo": {"Rollo 13x13": 10382, "Rollo 15x15": 10382, "Rollo 20x30": 3655.2, "Rollo 25x35": 5117.3, "Rollo 30x40": 7999, "Rollo 35x45": 6579.3, "Rollo 40x50": 7999, "Rollo 45x60": 7999, "Rollo 50x70": 7999, "Kg. Folex 25x35": 6800, "Kg. Folex 25x40": 6800, "Cons. Blanco x50": 3490, "Bolsas Cajon x100": 22088.2, "Cons. Negro 60x90": 1556, "Cons. Negro 80x110": 2520, "Cons. Negro 90x120": 2924, "Rollo Cristal 35x45": 14411, "Rollo Cristal 45x60": 14411, "Bolsas Cristal 45x90": 191568, "Bolsas Cristal 58x90": 78012, "Kg. Torq. Rojo 45x60": 6469, "Kg. Troq. Rojo 35x45": 6469, "Cam. 30x40 blanca x100": 1838.9, "Cam. 40x50 blanca x100": 3085.4, "Cam. 45x60 blanca x100": 4936.6}}, "empleados": [{"pass": "", "nombre": "Mauri"}, {"pass": "", "nombre": "Hugo"}, {"pass": "", "nombre": "Ale"}, {"pass": "", "nombre": "Tute"}], "presupuestos": [{"obs": "", "deuda": 0, "fecha": "2026-08-20", "total": 22479.6, "estado": "Pendiente", "lineas": [{"cod": "0011", "cant": 6, "nombre": "Rollo 20x30", "precio": 3746.6, "importe": 22479.6}], "numero": 547441, "cliente": {"dir": "Av. Eva duarte de peron 1287", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Grand Bourg", "codigo": "G", "nombre": "La Rotonda", "lista_precio": "Gloria"}, "validez": "", "subtotal": 22479.6}, {"obs": "", "deuda": 0, "fecha": "2026-08-20", "total": 13372, "estado": "Pendiente", "lineas": [{"cod": "0003", "cant": 4, "nombre": "Cam. 40x50 blanca x100", "precio": 3343, "importe": 13372}], "numero": 547440, "cliente": {"dir": "Mazza 2696", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Polvorines", "codigo": "", "nombre": "Edu Car Darragueira"}, "validez": "", "subtotal": 13372}, {"obs": "", "deuda": 0, "fecha": "2026-07-23", "total": 1070208, "estado": "Pendiente", "lineas": [{"cod": "0032", "cant": 40, "nombre": "Bolsas Cajon x100", "precio": 20080, "importe": 803200}, {"cod": "", "cant": 20, "nombre": "Bolsas PP 35x45", "precio": 6720, "importe": 134400}, {"cod": "0025", "cant": 2, "nombre": "Cons. Blanco x50", "precio": 17450, "importe": 34900}, {"cod": "0051", "cant": 1, "nombre": "Higienico Ele. 24x50", "precio": 14050, "importe": 14050}, {"cod": "", "cant": 3, "nombre": "Guantes Nitrilo L x100", "precio": 9400, "importe": 28200}, {"cod": "", "cant": 3, "nombre": "Guantes Nitrilo M x100", "precio": 9400, "importe": 28200}, {"cod": "", "cant": 2, "nombre": "Carbonicos", "precio": 380, "importe": 760}, {"cod": "", "cant": 10, "nombre": "Etiquetas pegasola", "precio": 2190, "importe": 21900}, {"cod": "", "cant": 2, "nombre": "Ganchitos 24/6 x1000u.", "precio": 2299, "importe": 4598}], "numero": 547439, "cliente": {"dir": "Luis maria saavedra 2354", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Villa maipu", "codigo": "G", "nombre": "Empanadas Gustavo", "lista_precio": "Gloria"}, "validez": "", "subtotal": 1070208}, {"obs": "", "deuda": -5066.2, "fecha": "2026-07-23", "total": 141956, "estado": "Pendiente", "lineas": [{"cod": "0001", "cant": 78, "nombre": "Cam. 30x40 blanca x100", "precio": 1884.9, "importe": 147022.2}], "numero": 547438, "cliente": {"dir": "General savio 3406", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Polvorines", "codigo": "G", "nombre": "Buen corte", "lista_precio": "Gloria"}, "validez": "", "subtotal": 147022.2}, {"obs": "", "deuda": 2345, "fecha": "2026-07-23", "pagos": [{"nota": "", "fecha": "22/7/2026", "forma": "Efectivo", "monto": 99000}], "total": 93933.8, "estado": "Aprobado", "lineas": [{"cod": "0001", "cant": 10, "nombre": "Cam. 30x40 blanca x100", "precio": 1884.9, "importe": 18849}, {"cod": "0003", "cant": 23, "nombre": "Cam. 40x50 blanca x100", "precio": 3162.6, "importe": 72739.8}], "numero": 547437, "cliente": {"dir": "General savio 3406", "iva": "Consumidor Final", "tel": "", "cuit": "", "email": "", "notas": "Zona: Polvorines", "codigo": "G", "nombre": "Buen corte", "lista_precio": "Gloria"}, "validez": "", "subtotal": 91588.8}]}</script>
+<script type="application/json" id="db-defaults-data">{"actividad": [], "contador": {"presupuesto": 547442}, "proveedores": [], "caja": [], "config": {"dir": "Renefavaloro 4933", "iva": "Responsable Inscripto", "pie": "Precios sujetos a variación sin previo aviso. DOCUMENTO NO VÁLIDO COMO FACTURA.", "tel": "1160089998", "cuit": "", "dias": 15, "email": "", "filas": 12, "nombre": "Distribuidora HAP"}, "productos": [], "clientes": [], "listas_precio": {}, "empleados": [], "presupuestos": []}</script>
 <div id="login-screen" style="display:flex">
   <div class="login-box">
     <h1>📦 Distribuidora HAP</h1>
@@ -1476,7 +1485,6 @@ let rolActual = null; // 'admin' | 'empleado'
 const SECCIONES_EMPLEADO = ['dashboard','clientes','presupuestos','entrega','deudores','afavor','proveedores'];
 const SECCIONES_ADMIN    = ['dashboard','productos','controlstock','listas','clientes','presupuestos','entrega','deudores','afavor','caja','proveedores','ganancia','ventas','contabilidad','actividad','config'];
 
-function getPassword(){ return db.config?.password || '1234'; }
 
 let nombreUsuarioActual = '';
 let nivelActual = 'empleado';   // 'admin' | 'socio' | 'caja' | 'empleado'
@@ -1501,7 +1509,7 @@ function seccionesPermitidas(){
 }
 
 function renderLoginEmpleados(){
-  const empleados = db.empleados || [{nombre:'Empleado', pass:'', codigo:''}];
+  const empleados = listaLogin();
   const btns = document.getElementById('login-btns-empleados');
   if(!btns) return;
 
@@ -1518,19 +1526,37 @@ function renderLoginEmpleados(){
   \`;
 
   btns.innerHTML = empleados.map((e,i) =>
-    e.pass
+    e.tienePass
       ? \`<button class="btn-login-emp" style="width:100%" onclick="mostrarPassEmpleado(\${i})">👤 \${e.nombre}</button>\`
       : \`<button class="btn-login-emp" style="width:100%" onclick="entrarComoEmpleado(\${i})">👤 \${e.nombre}</button>\`
   ).join('');
 }
 
-async function entrarComoEmpleado(idx=0){
-  const empleados = db.empleados || [{nombre:'Empleado', pass:'', codigo:''}];
-  const emp = empleados[idx] || empleados[0];
-  aplicarNivelLogin(emp);
-  codigoVendedorActual = emp.codigo || '';
+function listaLogin(){
+  if(loginInfo && loginInfo.empleados) return loginInfo.empleados;
+  return (db.empleados || []).map(function(e){ return { nombre: e.nombre, tienePass: !!e.tienePass }; });
+}
+function errorLogin(r){
+  const el = document.getElementById('login-error');
+  el.textContent = (r && r.j && r.j.error) || 'Contraseña incorrecta';
+  el.style.display = 'block';
+  document.getElementById('login-pass').value = '';
+}
+async function entrarConSesion(r, esAdminLogin){
+  authToken = r.j.token;
+  if(esAdminLogin){ rolActual = 'admin'; esSocioLogin = false; nivelActual = 'admin'; }
+  else { aplicarNivelLogin({ nombre: r.j.nombre, nivel: r.j.nivel }); codigoVendedorActual = r.j.codigo || ''; }
+  document.getElementById('login-error').style.display = 'none';
   await cargarDesdeServidor();
   iniciarApp();
+  if(r.j.claveDefault) alert('Estás usando la contraseña de fábrica (1234). Cambiala ya mismo en Configuración.');
+}
+async function entrarComoEmpleado(idx=0){
+  const emp = listaLogin()[idx] || listaLogin()[0];
+  if(!emp) return;
+  const r = await loginServidor({ tipo: 'empleado', nombre: emp.nombre, password: '' });
+  if(!r.ok){ alert((r.j && r.j.error) || 'No se pudo ingresar'); return; }
+  await entrarConSesion(r, false);
 }
 
 function mostrarPassEmpleado(idx){
@@ -1545,19 +1571,10 @@ function mostrarPassEmpleado(idx){
 
 async function verificarEmpleado(){
   const idx = parseInt(document.getElementById('login-pass').dataset.empIdx||0);
-  await cargarDesdeServidor();
-  const empleados = db.empleados || [];
-  const emp = empleados[idx];
+  const emp = listaLogin()[idx];
   if(!emp) return;
-  if(document.getElementById('login-pass').value === emp.pass){
-    aplicarNivelLogin(emp);
-    codigoVendedorActual = emp.codigo || '';
-    document.getElementById('login-error').style.display='none';
-    iniciarApp();
-  } else {
-    document.getElementById('login-error').style.display='block';
-    document.getElementById('login-pass').value='';
-  }
+  const r = await loginServidor({ tipo: 'empleado', nombre: emp.nombre, password: document.getElementById('login-pass').value });
+  if(r.ok) await entrarConSesion(r, false); else errorLogin(r);
 }
 function mostrarPassAdmin(){
   document.getElementById('login-pass-wrap').style.display='block';
@@ -1569,15 +1586,8 @@ function mostrarPassAdmin(){
 }
 async function verificarAdmin(){
   const pass = document.getElementById('login-pass').value;
-  await cargarDesdeServidor();
-  if(pass === getPassword()){
-    rolActual = 'admin'; esSocioLogin = false; nivelActual = 'admin';
-    document.getElementById('login-error').style.display='none';
-    iniciarApp();
-  } else {
-    document.getElementById('login-error').style.display='block';
-    document.getElementById('login-pass').value='';
-  }
+  const r = await loginServidor({ tipo: 'admin', password: pass });
+  if(r.ok) await entrarConSesion(r, true); else errorLogin(r);
 }
 function iniciarApp(){
   document.getElementById('login-screen').style.display='none';
@@ -1634,6 +1644,9 @@ async function sincronizar(){
 }
 
 function cerrarSesion(){
+  var pendiente = false; try{ pendiente = snapSync !== null && armarDelta().hay; }catch(e){}
+  if(!pendiente){ try{ localStorage.removeItem('hap_db'); }catch(e){} db = JSON.parse(JSON.stringify(DB_DEFAULTS)); snapSync = null; }
+  authToken=null;
   rolActual=null; esSocioLogin=false; nivelActual='empleado';
   nombreUsuarioActual='';
   document.getElementById('main-app').style.display='none';
@@ -1648,6 +1661,40 @@ function cerrarSesion(){
 // ===== FIN ROLES =====
 
 const API = ''; // misma dirección desde la que se abrió la página
+var authToken = null, loginInfo = null;
+async function apiFetch(url, opts){
+  opts = opts || {};
+  opts.headers = Object.assign({}, opts.headers || {});
+  if(authToken) opts.headers['Authorization'] = 'Bearer ' + authToken;
+  const res = await fetch(url, opts);
+  if(res && res.status === 401 && authToken){
+    authToken = null;
+    alert('Tu sesión venció. Volvé a ingresar. Lo que ya se guardó no se pierde.');
+    location.reload();
+  }
+  return res;
+}
+async function apiPost(url, body){
+  try{
+    const r = await apiFetch(API + url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    let j = {}; try{ j = await r.json(); }catch(e){}
+    return { ok: r.ok, j: j };
+  }catch(e){ return { ok: false, j: { error: 'Sin conexión con el servidor' } }; }
+}
+async function loginServidor(body){
+  try{
+    const res = await fetch(API + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    let j = {}; try{ j = await res.json(); }catch(e){}
+    return { ok: res.ok, status: res.status, j: j };
+  }catch(e){ return { ok: false, status: 0, j: { error: 'No se pudo conectar con el servidor' } }; }
+}
+async function cargarLoginInfo(){
+  try{
+    const r = await fetch(API + '/api/public/login-info');
+    if(r.ok){ loginInfo = await r.json(); renderLoginEmpleados(); return; }
+  }catch(e){}
+  setTimeout(cargarLoginInfo, 5000);
+}
 let guardandoEnServidor = false;
 let ultimoGuardadoOk = true;
 
@@ -1658,6 +1705,7 @@ function cargar() {
   } catch(e) {
     db = JSON.parse(JSON.stringify(DB_DEFAULTS));
   }
+  try { if(db.config) delete db.config.password; (db.empleados || []).forEach(function(e){ delete e.pass; }); } catch(e) {}
   try { ordenarDatos(); } catch(e) {}
 }
 
@@ -1729,7 +1777,7 @@ async function guardar() {
   guardandoEnServidor = true;
   let guardadoOk = false;
   try {
-    const res = await fetch(\`\${API}/api/db/delta\`, {
+    const res = await apiFetch(\`\${API}/api/db/delta\`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tables: delta.tablas })
@@ -1750,7 +1798,7 @@ async function cargarDesdeServidor() {
     await new Promise(r => setTimeout(r, 1000));
   }
   try {
-    const res = await fetch(\`\${API}/api/db/all\`);
+    const res = await apiFetch(\`\${API}/api/db/all\`);
     if(!res.ok){ avisoServidor(false); return; }
     const data = await res.json();
     avisoServidor(true);
@@ -3270,10 +3318,11 @@ async function agregarEmpleado(){
   var selN = document.getElementById('emp-nuevo-nivel');
   var nivel = selN ? selN.value : 'empleado';
   if(nivel === 'socio' && !esAdminReal()){ alert('Solo el administrador puede crear un socio.'); return; }
-  db.empleados.push({ nombre, pass, nivel });
+  db.empleados.push({ nombre, nivel, tienePass: !!pass });
   document.getElementById('emp-nuevo-nombre').value='';
   document.getElementById('emp-nuevo-pass').value='';
   await guardar();
+  if(pass){ const rp = await apiPost('/api/auth/empleado', { nombre: nombre, pass: pass }); if(!rp.ok) alert((rp.j && rp.j.error) || 'No se pudo guardar la contraseña'); }
   renderListaEmpleados();
   renderLoginEmpleados();
 }
@@ -3292,9 +3341,12 @@ async function editarEmpleado(idx){
   if(!puedeGestionarEmpleado(e)){ alert('Solo el administrador puede modificar a un socio.'); return; }
   const nombre = prompt('Nuevo nombre:', e.nombre);
   if(nombre===null) return;
-  const pass = prompt('Nueva contraseña (vacío = sin contraseña):', e.pass||'');
+  const pass = prompt('Nueva contraseña (vacío = no cambiarla; escribí QUITAR para dejarlo sin contraseña):', '');
   if(pass===null) return;
-  db.empleados[idx] = Object.assign({}, e, { nombre: nombre.trim(), pass: pass.trim() });
+  const nuevoNombre = nombre.trim(), p2 = pass.trim();
+  const rp = await apiPost('/api/auth/empleado', { nombre: nuevoNombre, anterior: e.nombre, pass: (p2 && p2 !== 'QUITAR') ? p2 : undefined, quitar: p2 === 'QUITAR' });
+  if(!rp.ok){ alert((rp.j && rp.j.error) || 'No se pudo guardar'); return; }
+  db.empleados[idx] = Object.assign({}, e, { nombre: nuevoNombre, tienePass: p2 === 'QUITAR' ? false : (p2 ? true : !!e.tienePass) });
   await guardar();
   renderListaEmpleados();
   renderLoginEmpleados();
@@ -3327,7 +3379,7 @@ function renderListaEmpleados(){
     return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">' +
       '<span style="font-size:13px;font-weight:600;flex:1">👤 ' + e.nombre + '</span>' +
       '<select ' + (puede ? '' : 'disabled ') + 'onchange="cambiarNivelEmpleado(' + i + ', this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:var(--radius)">' + opts + '</select>' +
-      '<span style="font-size:12px;color:var(--text3)">' + (e.pass ? 'Con contraseña' : 'Sin contraseña') + '</span>' +
+      '<span style="font-size:12px;color:var(--text3)">' + (e.tienePass ? 'Con contraseña' : 'Sin contraseña') + '</span>' +
       '<button class="btn btn-sm" ' + (puede ? '' : 'disabled ') + 'onclick="editarEmpleado(' + i + ')">✏️</button>' +
       '<button class="btn btn-sm btn-danger" ' + (puede ? '' : 'disabled ') + 'onclick="eliminarEmpleado(' + i + ')">🗑️</button>' +
       '</div>';
@@ -3826,9 +3878,13 @@ async function guardarConfig(){
     pie:document.getElementById('cfg-pie').value.trim(), 
     dias:parseInt(document.getElementById('cfg-dias').value)||15,
     filas:parseInt(document.getElementById('cfg-filas').value)||12,
-    margenGeneral:parseInt(document.getElementById('cfg-margen-general').value)||30,
-    password: nuevaPass || db.config?.password || '1234'
+    margenGeneral:parseInt(document.getElementById('cfg-margen-general').value)||30
   };
+  if(nuevaPass){
+    const rc = await apiPost('/api/auth/admin', { nueva: nuevaPass });
+    if(!rc.ok) alert((rc.j && rc.j.error) || 'No se pudo cambiar la contraseña');
+    else alert('Contraseña del administrador cambiada.');
+  }
   if(!db.contador) db.contador={};
   db.contador.presupuesto = parseInt(document.getElementById('cfg-contador').value)||1;
   if(nuevaPass) document.getElementById('cfg-pass').value='';
@@ -6357,30 +6413,12 @@ setInterval(async () => {
 
 // Arrancar: cargar local (rápido) luego servidor, después mostrar login
 cargar();
-renderLoginEmpleados(); // mostrar con datos locales primero
-cargarDesdeServidor().then(() => {
-  renderLoginEmpleados(); // actualizar con datos del servidor
-}).catch(() => {});
+renderLoginEmpleados();
+cargarLoginInfo(); // los datos del sistema se bajan recien despues de ingresar
 </script>
 </body>
 </html>
 `;
-
-app.get('/', (req, res) => {
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(HTML);
-});
-
-app.get('/api/db/all', async (req, res) => {
-  try {
-    const { data, error } = await supabase.from('hap_data').select('tabla, valor');
-    if (error) { console.error('GET error:', error); return res.status(500).json({ error: error.message }); }
-    const result = {};
-    (data||[]).forEach(row => { result[row.tabla] = row.valor; });
-    if(Array.isArray(result.caja)) cajaStampIds(result.caja);
-    res.json(result);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
 
 // ---- Guardado por cambios (delta): cada compu manda solo lo que cambio y el servidor lo aplica sobre lo ultimo que hay ----
 function cajaStampIds(arr){
@@ -6415,12 +6453,234 @@ async function escribirTabla(t, v){
 }
 let dbLock = Promise.resolve();
 function conLock(fn){ const p = dbLock.then(fn, fn); dbLock = p.catch(() => {}); return p; }
-app.post('/api/db/delta', async (req, res) => {
+
+app.get('/', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(HTML);
+});
+
+// ================= SEGURIDAD =================
+const crypto = require('crypto');
+const TABLAS_OCULTAS = (t) => t === 'auth' || String(t).indexOf('backup_') === 0;
+const TABLAS_TODOS = ['presupuestos', 'productos', 'clientes', 'actividad', 'contador', 'proveedores', 'caja'];
+const NIVELES_POR_DEFECTO = { hugo: 'caja', ale: 'caja', tute: 'socio' };
+function nivelDe(emp){
+  if(emp && emp.nivel) return emp.nivel;
+  const n = emp && emp.nombre ? String(emp.nombre).trim().toLowerCase() : '';
+  return NIVELES_POR_DEFECTO[n] || 'empleado';
+}
+const esAdminNivel = (n) => n === 'admin' || n === 'socio';
+
+function hashPass(p){
+  const salt = crypto.randomBytes(16).toString('hex');
+  return { salt, h: crypto.scryptSync(String(p), salt, 64).toString('hex') };
+}
+function checkPass(p, rec){
+  if(!rec || !rec.salt || !rec.h) return false;
+  const a = crypto.scryptSync(String(p), rec.salt, 64), b = Buffer.from(rec.h, 'hex');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// Credenciales: viven en la tabla "auth", que nunca se manda al navegador
+let authCache = null;
+async function cargarAuth(){
+  if(authCache) return authCache;
+  let a = await leerTabla('auth');
+  if(!a || typeof a !== 'object') a = {};
+  if(!a.empleados) a.empleados = {};
+  if(!a.secret) a.secret = crypto.randomBytes(32).toString('hex');
+  authCache = a;
+  return a;
+}
+async function guardarAuth(){ await escribirTabla('auth', authCache); }
+// Pasa las contraseñas viejas (texto plano) a hash y las borra de los datos
+let authMigrado = false;
+async function asegurarAuth(){
+  const a = await cargarAuth();
+  if(authMigrado) return a;
+  let cambio = false;
+  const cfg = await leerTabla('config');
+  if(!a.admin){
+    const plana = (cfg && cfg.password) ? String(cfg.password) : '1234';
+    a.admin = hashPass(plana);
+    cambio = true;
+  }
+  if(cfg && cfg.password !== undefined){ const c2 = Object.assign({}, cfg); delete c2.password; await escribirTabla('config', c2); }
+  const emps = await leerTabla('empleados');
+  if(Array.isArray(emps) && emps.some(e => e && e.pass !== undefined)){
+    emps.forEach(e => {
+      if(!e) return;
+      const k = String(e.nombre || '').trim().toLowerCase();
+      if(e.pass && !a.empleados[k]){ a.empleados[k] = hashPass(e.pass); cambio = true; }
+    });
+    await escribirTabla('empleados', emps.map(e => { const c = Object.assign({}, e); delete c.pass; return c; }));
+  }
+  if(cambio || !a.guardado){ a.guardado = true; await guardarAuth(); }
+  authMigrado = true;
+  return a;
+}
+const SECRETO_ENV = process.env.SESSION_SECRET || '';
+function firmar(payload){
+  const b = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const s = crypto.createHmac('sha256', SECRETO_ENV || authCache.secret).update(b).digest('base64url');
+  return b + '.' + s;
+}
+function leerToken(t){
+  try {
+    const [b, s] = String(t || '').split('.');
+    if(!b || !s || !authCache) return null;
+    const esp = crypto.createHmac('sha256', SECRETO_ENV || authCache.secret).update(b).digest('base64url');
+    if(s.length !== esp.length || !crypto.timingSafeEqual(Buffer.from(s), Buffer.from(esp))) return null;
+    const p = JSON.parse(Buffer.from(b, 'base64url').toString());
+    if(!p.exp || p.exp < Date.now()) return null;
+    return p;
+  } catch(e){ return null; }
+}
+async function requerirAuth(req, res, next){
+  try { await cargarAuth(); } catch(e){ return res.status(500).json({ error: 'No se pudo verificar la sesión' }); }
+  const h = req.headers.authorization || '';
+  const u = leerToken(h.indexOf('Bearer ') === 0 ? h.slice(7) : '');
+  if(!u) return res.status(401).json({ error: 'Sesión vencida o inválida' });
+  req.user = u; next();
+}
+// Freno a la fuerza bruta: 5 errores seguidos = 10 minutos bloqueado
+const intentos = new Map();
+function estaBloqueado(ip){ const r = intentos.get(ip); return r && r.hasta && r.hasta > Date.now(); }
+function falloLogin(ip){
+  const r = intentos.get(ip) || { n: 0 };
+  r.n++; if(r.n >= 5){ r.hasta = Date.now() + 10 * 60 * 1000; r.n = 0; }
+  intentos.set(ip, r);
+}
+
+app.get('/api/public/login-info', async (req, res) => {
+  try {
+    await conLock(asegurarAuth);
+    const emps = (await leerTabla('empleados')) || [];
+    res.json({ empleados: emps.filter(e => e && e.nombre).map(e => ({ nombre: e.nombre, tienePass: !!authCache.empleados[String(e.nombre).trim().toLowerCase()] })) });
+  } catch(e){ res.status(500).json({ error: 'No se pudo leer' }); }
+});
+
+app.post('/api/login', async (req, res) => {
+  try {
+    const ip = req.ip || 'x';
+    if(estaBloqueado(ip)) return res.status(429).json({ error: 'Demasiados intentos. Esperá 10 minutos.' });
+    await conLock(asegurarAuth);
+    const { tipo, nombre, password } = req.body || {};
+    const pass = String(password == null ? '' : password);
+    let usuario = null;
+    if(tipo === 'admin'){
+      if(checkPass(pass, authCache.admin)) usuario = { nivel: 'admin', nombre: 'Admin', codigo: '', claveDefault: pass === '1234' };
+    } else {
+      const emps = (await leerTabla('empleados')) || [];
+      const emp = emps.find(e => e && e.nombre === nombre);
+      if(emp){
+        const rec = authCache.empleados[String(emp.nombre).trim().toLowerCase()];
+        if(!rec || checkPass(pass, rec)) usuario = { nivel: nivelDe(emp), nombre: emp.nombre, codigo: emp.codigo || '' };
+      }
+    }
+    if(!usuario){ falloLogin(ip); return res.status(401).json({ error: 'Contraseña incorrecta' }); }
+    intentos.delete(ip);
+    const token = firmar({ nivel: usuario.nivel, nombre: usuario.nombre, exp: Date.now() + 12 * 3600 * 1000 });
+    res.json({ token, nivel: usuario.nivel, nombre: usuario.nombre, codigo: usuario.codigo, claveDefault: !!usuario.claveDefault });
+  } catch(e){ console.error('login error:', e.message); res.status(500).json({ error: 'Error al iniciar sesión' }); }
+});
+
+// Cambiar contraseñas (solo desde el servidor, nunca viajan guardadas en los datos)
+app.post('/api/auth/admin', requerirAuth, async (req, res) => {
+  try {
+    if(req.user.nivel !== 'admin') return res.status(403).json({ error: 'Solo el administrador' });
+    const nueva = String((req.body && req.body.nueva) || '');
+    if(nueva.length < 4) return res.status(400).json({ error: 'La contraseña tiene que tener al menos 4 caracteres' });
+    await conLock(async () => { const a = await cargarAuth(); a.admin = hashPass(nueva); await guardarAuth(); });
+    res.json({ ok: true });
+  } catch(e){ res.status(500).json({ error: e.message }); }
+});
+app.post('/api/auth/empleado', requerirAuth, async (req, res) => {
+  try {
+    if(!esAdminNivel(req.user.nivel)) return res.status(403).json({ error: 'Sin permiso' });
+    const { nombre, anterior, pass, quitar } = req.body || {};
+    if(!nombre) return res.status(400).json({ error: 'Falta el nombre' });
+    await conLock(async () => {
+      const a = await cargarAuth();
+      const k = String(nombre).trim().toLowerCase(), ka = String(anterior || nombre).trim().toLowerCase();
+      const emps = (await leerTabla('empleados')) || [];
+      const objetivo = emps.find(e => e && String(e.nombre).trim().toLowerCase() === ka);
+      if(objetivo && nivelDe(objetivo) === 'socio' && req.user.nivel !== 'admin') throw Object.assign(new Error('Solo el administrador puede modificar a un socio'), { codigo: 403 });
+      if(ka !== k && a.empleados[ka]){ a.empleados[k] = a.empleados[ka]; delete a.empleados[ka]; }
+      if(quitar) delete a.empleados[k];
+      else if(pass) a.empleados[k] = hashPass(pass);
+      await guardarAuth();
+    });
+    res.json({ ok: true });
+  } catch(e){ res.status(e.codigo || 500).json({ error: e.message }); }
+});
+
+// ---- Lectura: cada usuario ve solo lo que le corresponde, sin contraseñas ----
+app.get('/api/db/all', requerirAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('hap_data').select('tabla, valor');
+    if (error) { console.error('GET error:', error.message); return res.status(500).json({ error: 'Error de lectura' }); }
+    const result = {};
+    (data || []).forEach(row => { if(!TABLAS_OCULTAS(row.tabla)) result[row.tabla] = row.valor; });
+    if(Array.isArray(result.caja)) cajaStampIds(result.caja);
+    if(result.config) delete result.config.password;
+    if(Array.isArray(result.empleados)){
+      result.empleados = result.empleados.filter(Boolean).map(e => {
+        const c = Object.assign({}, e); delete c.pass;
+        c.tienePass = !!authCache.empleados[String(e.nombre || '').trim().toLowerCase()];
+        return c;
+      });
+    }
+    if(!esAdminNivel(req.user.nivel)) delete result.prov_movs;
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: 'Error de lectura' }); }
+});
+
+// ---- Escritura por cambios, con permisos por nivel ----
+function puedeEscribir(nivel, tabla){
+  if(TABLAS_OCULTAS(tabla)) return false;
+  if(esAdminNivel(nivel)) return true;
+  return TABLAS_TODOS.indexOf(tabla) > -1;
+}
+app.post('/api/db/delta', requerirAuth, async (req, res) => {
   try {
     const tables = (req.body && req.body.tables) || {};
+    const nivel = req.user.nivel, admin = esAdminNivel(nivel);
+    const ignoradas = [];
     await conLock(async () => {
       for(const t of Object.keys(tables)){
-        const d = tables[t] || {};
+        let d = tables[t] || {};
+        if(!puedeEscribir(nivel, t)){ ignoradas.push(t); continue; }
+        // los empleados que no son admin solo pueden AGREGAR a la caja, no borrar ni cambiar
+        if(t === 'caja' && !admin){
+          const actual = (await leerTabla('caja')) || []; cajaStampIds(actual);
+          let nuevas = d.mode === 'records' ? (d.upserts || []) : (Array.isArray(d.valor) ? d.valor : []);
+          cajaStampIds(nuevas);
+          const ids = {}; actual.forEach(m => { ids[m.id] = 1; });
+          await escribirTabla('caja', actual.concat(nuevas.filter(m => m && !ids[m.id])));
+          continue;
+        }
+        if(t === 'empleados'){
+          const actual = (await leerTabla('empleados')) || [];
+          const socios = actual.filter(e => e && nivelDe(e) === 'socio');
+          const sociosNombres = socios.map(e => String(e.nombre).trim().toLowerCase());
+          let nuevo = Array.isArray(d.valor) ? d.valor.filter(Boolean).map(e => { const c = Object.assign({}, e); delete c.pass; delete c.tienePass; return c; }) : actual;
+          if(req.user.nivel !== 'admin'){
+            nuevo = nuevo.filter(e => sociosNombres.indexOf(String(e.nombre).trim().toLowerCase()) === -1);
+            nuevo = nuevo.map(e => (e.nivel === 'socio' ? Object.assign({}, e, { nivel: 'empleado' }) : e)).concat(socios);
+          }
+          await escribirTabla('empleados', nuevo);
+          const a = await cargarAuth();
+          const nombres = nuevo.map(e => String(e.nombre).trim().toLowerCase());
+          Object.keys(a.empleados).forEach(k => { if(nombres.indexOf(k) === -1) delete a.empleados[k]; });
+          await guardarAuth();
+          continue;
+        }
+        if(t === 'config'){
+          const c = Object.assign({}, d.valor || {}); delete c.password;
+          await escribirTabla('config', c); continue;
+        }
         if(d.mode === 'records'){
           const actual = await leerTabla(t);
           if(t === 'caja') cajaStampIds(actual);
@@ -6438,20 +6698,27 @@ app.post('/api/db/delta', async (req, res) => {
         }
       }
     });
-    res.json({ ok: true });
-  } catch (e) { console.error('delta error:', e.message); res.status(500).json({ error: e.message }); }
+    respaldoDiario().catch(e => console.error('respaldo:', e.message));
+    res.json({ ok: true, ignoradas });
+  } catch (e) { console.error('delta error:', e.message); res.status(500).json({ error: 'Error al guardar' }); }
 });
 
-app.post('/api/db/all', async (req, res) => {
-  try {
-    const db = req.body;
-    for(const tabla of Object.keys(db)) {
-      const { error } = await supabase.from('hap_data').upsert({ tabla, valor: db[tabla] }, { onConflict: 'tabla' });
-      if(error) console.error('Error tabla', tabla, error.message);
-    }
-    res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
+// ---- Copia de seguridad automática: una por día, se guardan las últimas 14 ----
+let ultimoRespaldo = '';
+async function respaldoDiario(){
+  const dia = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+  if(ultimoRespaldo === dia) return;
+  ultimoRespaldo = dia;
+  if(await leerTabla('backup_' + dia)) return;
+  const { data, error } = await supabase.from('hap_data').select('tabla, valor');
+  if(error) throw new Error(error.message);
+  const tablas = {};
+  (data || []).forEach(r => { if(!TABLAS_OCULTAS(r.tabla)) tablas[r.tabla] = r.valor; });
+  await escribirTabla('backup_' + dia, { fecha: dia, tablas });
+  const { data: lista } = await supabase.from('hap_data').select('tabla').like('tabla', 'backup_%');
+  const viejos = (lista || []).map(r => r.tabla).sort().reverse().slice(14);
+  for(const v of viejos){ await supabase.from('hap_data').delete().eq('tabla', v); }
+}
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 

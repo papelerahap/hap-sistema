@@ -4492,21 +4492,28 @@ var agrSel = {};
 function agruparCandidatas(){
   var cod = document.getElementById('agr-grupo').value;
   var desde = document.getElementById('agr-desde').value, hasta = document.getElementById('agr-hasta').value;
-  var r = { lista: [], sinEntregar: 0 };
+  var r = { lista: [], sinEntregar: 0, extras: [], yaAgrupadas: [] };
   db.presupuestos.forEach(function(p){
-    if(p.estado !== 'Pendiente' || p.cierre || !p.cliente) return;
+    if(p.estado !== 'Pendiente' || !p.cliente) return;
     if(cod !== '*' && (p.cliente.codigo || '').toUpperCase() !== cod) return;
     if(saldoPendienteBoleta(p) <= 0.01) return;
+    if(p.cierre){
+      var cc = (db.cierres || []).find(function(x){ return x.id === p.cierre && !x.pagado; });
+      if(cc) r.yaAgrupadas.push({ p: p, motivo: 'ya está en "' + cc.nombre + '"' });
+      return;
+    }
     var f = fechaParaResumen(p);
-    if(!f || (desde && f < desde) || (hasta && f > hasta)) return;
-    if(p.impreso && !p.entregado){ r.sinEntregar++; return; }
+    if(!f || (desde && f < desde) || (hasta && f > hasta)){ r.extras.push({ p: p, motivo: 'fecha ' + cierreFechaCorta(f) + ' (fuera del rango)' }); return; }
+    if(p.impreso && !p.entregado){ r.sinEntregar++; r.extras.push({ p: p, motivo: 'impresa, todavía sin entregar' }); return; }
     r.lista.push(p);
   });
+  r.extras.sort(function(a, b){ return (a.p.cliente.nombre || '').localeCompare(b.p.cliente.nombre || '', 'es'); });
   r.lista.sort(function(a, b){ return (a.cliente.nombre || '').localeCompare(b.cliente.nombre || '', 'es'); });
   return r;
 }
 function agruparElegidas(){
-  return agruparCandidatas().lista.filter(function(p){ return agrSel[p.numero] !== false; });
+  var r = agruparCandidatas();
+  return r.lista.filter(function(p){ return agrSel[p.numero] !== false; }).concat(r.extras.filter(function(x){ return agrSel[x.p.numero] === true; }).map(function(x){ return x.p; }));
 }
 function agruparNombreAuto(){
   var cod = document.getElementById('agr-grupo').value;
@@ -4526,10 +4533,21 @@ function agruparPreview(){
     if(on){ tot += s; n++; }
     h += '<tr><td><input type="checkbox" ' + (on ? 'checked ' : '') + 'onchange="agruparToggle(' + p.numero + ',this.checked)"></td><td>' + ctbEsc(p.cliente.nombre) + '</td><td style="text-align:right">#' + p.numero + '</td><td style="text-align:right">$' + fmt(s) + '</td></tr>';
   });
+  if(r.extras.length || r.yaAgrupadas.length){
+    h += '<tr><td colspan="4" style="background:var(--bg);font-size:12px;color:var(--text3);padding:8px">Otras boletas pendientes de este grupo que no entraron solas (tildalas si las querés sumar):</td></tr>';
+    r.extras.forEach(function(x){
+      var p = x.p, on = agrSel[p.numero] === true, s2 = saldoPendienteBoleta(p);
+      if(on){ tot += s2; n++; }
+      h += '<tr><td><input type="checkbox" ' + (on ? 'checked ' : '') + 'onchange="agruparToggle(' + p.numero + ',this.checked)"></td><td>' + ctbEsc(p.cliente.nombre) + '<div style="font-size:11px;color:var(--amber)">' + ctbEsc(x.motivo) + '</div></td><td style="text-align:right">#' + p.numero + '</td><td style="text-align:right">$' + fmt(s2) + '</td></tr>';
+    });
+    r.yaAgrupadas.forEach(function(x){
+      h += '<tr style="opacity:.6"><td></td><td>' + ctbEsc(x.p.cliente.nombre) + '<div style="font-size:11px">' + ctbEsc(x.motivo) + '</div></td><td style="text-align:right">#' + x.p.numero + '</td><td style="text-align:right">$' + fmt(saldoPendienteBoleta(x.p)) + '</td></tr>';
+    });
+  }
   document.getElementById('agr-tabla').innerHTML = h || '<tr class="empty-row"><td colspan="4">No hay boletas pendientes de este grupo en esas fechas</td></tr>';
   var nmEl = document.getElementById('agr-nombre');
   if(!nmEl.dataset.manual) nmEl.value = agruparNombreAuto();
-  document.getElementById('agr-resumen').textContent = n + ' de ' + r.lista.length + ' boleta' + (r.lista.length !== 1 ? 's' : '') + ' elegida' + (n !== 1 ? 's' : '') + ' · Total a cobrar $' + fmt(tot) + (r.sinEntregar ? ' · ' + r.sinEntregar + ' todavía sin entregar (no se incluyen)' : '');
+  document.getElementById('agr-resumen').textContent = n + ' de ' + (r.lista.length + r.extras.length) + ' boleta' + ((r.lista.length + r.extras.length) !== 1 ? 's' : '') + ' elegida' + (n !== 1 ? 's' : '') + ' · Total a cobrar $' + fmt(tot) + (r.sinEntregar ? ' · ' + r.sinEntregar + ' impresa' + (r.sinEntregar !== 1 ? 's' : '') + ' sin entregar (no se incluyen salvo que las tildes abajo)' : '');
 }
 function confirmarAgrupar(){
   if(rolActual !== 'admin') return;

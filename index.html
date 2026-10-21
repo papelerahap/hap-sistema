@@ -1148,6 +1148,10 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
   <div class="modal" style="max-width:420px">
     <h3>Cobrar boleta completa</h3>
     <div id="cobro-info" style="font-size:13px;color:var(--text2);margin-bottom:12px"></div>
+    <div class="form-group" id="cobro-monto-wrap" style="display:none;margin-bottom:12px">
+      <label>Monto que paga ahora ($) — si es menos que el total, queda el resto como deuda</label>
+      <input type="number" id="cobro-monto" step="0.01" placeholder="0.00">
+    </div>
     <div class="form-group" style="margin-bottom:12px">
       <label>¿Cómo pagó?</label>
       <select id="cobro-forma" onchange="cobroFormaCambio()">
@@ -4586,13 +4590,21 @@ function cobrarGrupo(id){
   document.getElementById('cobro-info').textContent = c.nombre + ' — ' + cierreMiembros(c).length + ' boletas — Total a cobrar: $' + fmt(cierreSaldo(c));
   document.getElementById('cobro-forma').value = 'Efectivo';
   document.getElementById('cobro-efvo').value = '';
+  document.getElementById('cobro-monto-wrap').style.display = 'block';
+  document.getElementById('cobro-monto').value = Math.round(cierreSaldo(c) * 100) / 100;
   cobroFormaCambio();
   document.getElementById('modal-cobro').classList.add('open');
 }
 function confirmarCobroGrupo(){
   var c = (db.cierres || []).find(function(x){ return x.id === cobroGrupo; }); if(!c) return;
-  var ms = cierreMiembros(c), total = Math.round(cierreSaldo(c) * 100) / 100;
-  if(!ms.length || total <= 0.01){ alert('No queda nada para cobrar en esta semana.'); return; }
+  var ms = cierreMiembros(c).sort(function(a, b){ return String(a.fecha || '').localeCompare(String(b.fecha || '')) || (a.numero - b.numero); });
+  var saldoTotal = Math.round(cierreSaldo(c) * 100) / 100;
+  if(!ms.length || saldoTotal <= 0.01){ alert('No queda nada para cobrar en esta semana.'); return; }
+  var total = Math.round((parseFloat(document.getElementById('cobro-monto').value) || 0) * 100) / 100;
+  if(total <= 0.01){ alert('Escribí cuánto paga ahora.'); return; }
+  if(total > saldoTotal + 0.01){ alert('El monto es mayor que lo que se debe ($' + fmt(saldoTotal) + ').'); return; }
+  if(total > saldoTotal) total = saldoTotal;
+  var parcial = total < saldoTotal - 0.01;
   var forma = document.getElementById('cobro-forma').value;
   var efectivo = 0, transf = 0;
   if(forma === 'Efectivo + Transferencia'){
@@ -4603,10 +4615,13 @@ function confirmarCobroGrupo(){
   var hoy = new Date().toLocaleDateString('es-AR');
   var restoEf = efectivo, resumenCaja = {};
   function sumaCaja(f, m){ resumenCaja[f] = Math.round(((resumenCaja[f] || 0) + m) * 100) / 100; }
+  var restoPago = total, nPagadas = 0;
   ms.forEach(function(p){
-    var sd = Math.round(saldoPendienteBoleta(p) * 100) / 100;
+    var sd = Math.min(Math.round(saldoPendienteBoleta(p) * 100) / 100, restoPago);
+    if(sd <= 0.001) return;
+    restoPago = Math.round((restoPago - sd) * 100) / 100; nPagadas++;
     if(!p.pagos) p.pagos = [];
-    var nota = 'Pago junto: ' + c.nombre;
+    var nota = (parcial ? 'Pago parcial junto: ' : 'Pago junto: ') + c.nombre;
     if(forma !== 'Efectivo + Transferencia'){
       p.pagos.push({ fecha: hoy, monto: sd, forma: forma, nota: nota }); sumaCaja(forma, sd);
     } else {
@@ -4615,14 +4630,14 @@ function confirmarCobroGrupo(){
       if(ef > 0.001){ p.pagos.push({ fecha: hoy, monto: ef, forma: 'Efectivo', nota: nota }); sumaCaja('Efectivo', ef); }
       if(tr > 0.001){ p.pagos.push({ fecha: hoy, monto: tr, forma: 'Transferencia', nota: nota }); sumaCaja('Transferencia', tr); }
     }
-    p.estado = 'Aprobado';
+    if(saldoPendienteBoleta(p) <= 0.01) p.estado = 'Aprobado';
   });
   if(!db.caja) db.caja = [];
   Object.keys(resumenCaja).forEach(function(f){
-    db.caja.push({ fecha: hoy, tipo: 'entrada', medio: f, desc: 'Cobro ' + c.nombre + ' (' + ms.length + ' boletas)', monto: resumenCaja[f] });
+    db.caja.push({ fecha: hoy, tipo: 'entrada', medio: f, desc: (parcial ? 'Pago parcial ' : 'Cobro ') + c.nombre + ' (' + nPagadas + ' boletas)', monto: resumenCaja[f] });
   });
-  c.pagado = true; c.fecha_pago = new Date().toISOString();
-  registrarActividad('pago', 'Cobró junta la semana: ' + c.nombre, ms.length + ' boletas | Total: $' + fmt(total) + ' | Forma: ' + forma);
+  if(!parcial){ c.pagado = true; c.fecha_pago = new Date().toISOString(); }
+  registrarActividad('pago', (parcial ? 'Pago parcial de la semana junta: ' : 'Cobró junta la semana: ') + c.nombre, nPagadas + ' boletas | Total: $' + fmt(total) + (parcial ? ' | Queda: $' + fmt(saldoTotal - total) : '') + ' | Forma: ' + forma);
   cobroGrupo = null;
   guardar(); cerrarModales(); renderDeudores(); renderAfavor(); renderDashboard(); renderPresupuestos(); try{ renderEntrega(); renderCaja(); }catch(e){}
 }
@@ -4630,6 +4645,7 @@ function confirmarCobroGrupo(){
 function cobrarPresupuesto(idx, cb){
   var p=db.presupuestos[idx]; if(!p) return;
   cobroIdx=idx; cobroCb=cb||null; cobroGrupo=null;
+  document.getElementById('cobro-monto-wrap').style.display='none';
   var saldo=saldoDeuda(p);
   document.getElementById('cobro-info').textContent='Boleta #'+p.numero+' — '+(p.cliente?p.cliente.nombre:'Consumidor final')+' — Saldo a cobrar: $'+fmt(saldo);
   document.getElementById('cobro-forma').value='Efectivo';

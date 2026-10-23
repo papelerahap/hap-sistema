@@ -3792,14 +3792,16 @@ function renderPresupuestos(){
   const hasta=document.getElementById('pres-hasta')?.value;
   const lista=db.presupuestos.filter(p=>{
     const cod=(p.cliente?.codigo||'').toUpperCase();
+    var qEl=document.getElementById('pres-buscar');
+    var verCob=document.getElementById('pres-ver-cobradas');
+    var hayBusqueda=!!(qEl&&qEl.value.trim());
+    if(!hayBusqueda){ // al buscar por nombre o numero se ignoran el filtro de grupo y las fechas, para que nada quede escondido
     if(filtroPresupuesto.indexOf('LISTA:')===0){ if(!clienteEnLista(p.cliente,filtroPresupuesto.slice(6))) return false; }
     else if(filtroPresupuesto!==''&&filtroPresupuesto!=='SIN'&&cod!==filtroPresupuesto) return false;
     if(filtroPresupuesto==='SIN'&&cod) return false;
     if(desde&&p.fecha&&p.fecha<desde) return false;
     if(hasta&&p.fecha&&p.fecha>hasta) return false;
-    var qEl=document.getElementById('pres-buscar');
-    var verCob=document.getElementById('pres-ver-cobradas');
-    var hayBusqueda=!!(qEl&&qEl.value.trim());
+    }
     if((p.estado==='Aprobado'||p.impreso)&&!hayBusqueda&&!(verCob&&verCob.checked)) return false;
     var q=qEl?normBusq(qEl.value):'';
     if(q){

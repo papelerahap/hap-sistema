@@ -5391,6 +5391,7 @@ function renderAsignador(){
 }
 
 function asignarProveedor(prodIdx, provNombre){
+  if(!puedeAsignarProv()) return;
   db.productos[prodIdx].proveedor = provNombre||'';
   guardar();
   // Refrescar sin perder el scroll
@@ -5437,6 +5438,7 @@ function eliminarProveedor(idx){
   if(!confirm('¿Eliminar este proveedor?'))return;
   db.proveedores.splice(idx,1); guardar(); renderProveedores();
 }
+function puedeAsignarProv(){ return rolActual==='admin' || nivelActual==='caja'; }
 function renderProveedores(){
   if(!db.proveedores)db.proveedores=[];
   // Renderizar botones según rol
@@ -5448,7 +5450,8 @@ function renderProveedores(){
         <button class="btn btn-green" onclick="abrirModalProducto()">+ Nuevo producto</button>
         <button class="btn btn-primary" onclick="abrirModalProveedor()">+ Nuevo proveedor</button>`;
     } else {
-      headerBtns.innerHTML = `
+      headerBtns.innerHTML = (puedeAsignarProv() ? `
+        <button class="btn" onclick="showSubseccion('sub-asignar')">📋 Asignar productos</button>` : '') + `
         <button class="btn btn-green" onclick="abrirModalProducto()">+ Nuevo producto</button>
         <button class="btn btn-primary" onclick="abrirModalProveedor()">+ Nuevo proveedor</button>`;
     }
@@ -5522,9 +5525,9 @@ function renderProveedores(){
         <div style="display:flex;gap:8px;align-items:center">
           ${rolActual==='admin'?`<span style="font-size:13px;margin-right:4px">${provSaldoTexto(provSaldo(prov.nombre))}</span><button class="btn btn-sm" onclick="abrirCuentaProv(${i})">📒 Cuenta</button>`:''}
           <button class="btn btn-sm btn-primary" onclick="abrirModalPedido(${i})">📦 Registrar pedido</button>
+          ${puedeAsignarProv()?`<button class="btn btn-sm btn-green" onclick="abrirModalAsignarProd(${i})">+ Agregar producto</button>`:''}
           ${rolActual==='admin'?`
           <button class="btn btn-sm" onclick="abrirPlanilla(${i})">📝 Planilla de costos</button>
-          <button class="btn btn-sm btn-green" onclick="abrirModalAsignarProd(${i})">+ Agregar producto</button>
           <button class="btn btn-sm" onclick="abrirModalProveedor(${i})">✏️</button>
           <button class="btn btn-sm btn-danger" onclick="eliminarProveedor(${i})">🗑️</button>`:''}
         </div>
@@ -5539,7 +5542,7 @@ function renderProveedores(){
     html += `<div class="card" style="margin-bottom:1.25rem;border-color:var(--border)">
       <div class="card-header">
         <span style="font-size:15px;font-weight:700;color:var(--text3)">⚠️ Sin proveedor asignado</span>
-        ${rolActual==='admin'?`<button class="btn btn-sm" onclick="showSubseccion('sub-asignar')">📋 Asignar proveedor</button>`:''}
+        ${puedeAsignarProv()?`<button class="btn btn-sm" onclick="showSubseccion('sub-asignar')">📋 Asignar proveedor</button>`:''}
       </div>
       <div style="padding:0 0 4px">${tablaProds(sinProv)}</div>
     </div>`;
@@ -5561,6 +5564,7 @@ function abrirModalAsignarProd(provIdx){
   document.getElementById('asignar-prod-search').value='';
   document.getElementById('asignar-prod-idx').value='';
   document.getElementById('asignar-prod-costo').value='';
+  var cEl=document.getElementById('asignar-prod-costo'); if(cEl&&cEl.closest('.form-group')) cEl.closest('.form-group').style.display = rolActual==='admin' ? '' : 'none';
   document.getElementById('asignar-prod-info').style.display='none';
   document.getElementById('asignar-prod-ac').classList.remove('open');
   document.getElementById('modal-asignar-prod').classList.add('open');
@@ -5601,7 +5605,7 @@ function confirmarAsignarProd(){
   const prov=db.proveedores[asignarProvIdx];
   db.productos[idx].proveedor=prov.nombre;
   const costo=parseFloat(document.getElementById('asignar-prod-costo').value)||0;
-  if(costo>0) db.productos[idx].costo=costo;
+  if(costo>0 && rolActual==='admin') db.productos[idx].costo=costo;
   ordenarDatos();
   guardar(); cerrarModales(); renderProveedores();
 }

@@ -1558,6 +1558,7 @@ function nivelDe(emp){
   var n = emp && emp.nombre ? emp.nombre.trim().toLowerCase() : '';
   return NIVELES_POR_DEFECTO[n] || 'empleado';
 }
+function puedeCostos(){ return rolActual === 'admin' || nivelActual === 'caja'; }
 function esAdminReal(){ return rolActual === 'admin' && !esSocioLogin; }
 function aplicarNivelLogin(emp){
   nivelActual = nivelDe(emp);
@@ -1762,10 +1763,8 @@ function aplicarRol(){
     });
   });
   // En productos, ocultar columna costo si es empleado
-  if(!esAdmin){
-    document.querySelectorAll('.col-costo').forEach(el=>el.style.display='none');
-  }
-  ['p-costo','p-margen'].forEach(function(id){ var el=document.getElementById(id); if(el&&el.closest('.form-group')) el.closest('.form-group').style.display = esAdmin ? '' : 'none'; });
+  document.querySelectorAll('.col-costo').forEach(el=>el.style.display=puedeCostos()?'':'none');
+  ['p-costo','p-margen'].forEach(function(id){ var el=document.getElementById(id); if(el&&el.closest('.form-group')) el.closest('.form-group').style.display = puedeCostos() ? '' : 'none'; });
 }
 async function sincronizar(){
   const btn = document.querySelector('button[onclick="sincronizar()"]');
@@ -2095,7 +2094,7 @@ function renderProductos(filtro=''){
       <td style="font-size:12px;color:var(--text2)">\${p.codigo||'—'}</td>
       <td><strong>\${p.nombre}</strong></td><td style="color:var(--text2)">\${p.categoria}</td>
       <td style="font-size:12px">\${p.medida||'—'}</td>
-      <td class="col-costo"\${rolActual!=='admin'?' style="display:none"':''}>$\${fmt(p.costo)}</td>
+      <td class="col-costo"\${!puedeCostos()?' style="display:none"':''}>$\${fmt(p.costo)}</td>
       <td><strong>$\${fmt(p.precio)}</strong></td>
       <td>\${p.stock} <span style="font-size:11px;color:var(--text3)">\${p.unidad}</span>\${p.guardado>0?'<div style="font-size:11px;color:var(--text3)">+'+p.guardado+' guardados</div>':''}</td><td>\${estadoBadge(p)}</td>
       <td style="white-space:nowrap"><button class="btn btn-sm" onclick="abrirModalProducto(\${i})">✏️</button> \${rolActual==='admin'?\`<button class="btn btn-sm btn-danger" onclick="eliminarProducto(\${i})">🗑️</button>\`:''}</td>
@@ -4869,6 +4868,7 @@ function renderCaja(){
 }
 
 async function guardarCostoProv(prodIdx){
+  if(!puedeCostos()) return;
   const input = document.getElementById(\`costo-prov-\${prodIdx}\`);
   if(!input) return;
   db.productos[prodIdx].costo = parseFloat(input.value)||0;
@@ -5115,7 +5115,7 @@ function planillaVisibles(){
 }
 
 function abrirPlanilla(provIdx){
-  if(rolActual !== 'admin') return;
+  if(!puedeCostos()) return;
   var prov = db.proveedores[provIdx];
   if(!prov) return;
   planillaProv = prov.nombre;
@@ -5447,7 +5447,7 @@ function renderProveedores(){
       <thead><tr>
         <th style="text-align:left;font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;padding:6px 10px;border-bottom:1px solid var(--border);background:var(--bg)">Producto</th>
         <th style="text-align:left;font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;padding:6px 10px;border-bottom:1px solid var(--border);background:var(--bg)">Medida</th>
-        \${rolActual==='admin'?\`
+        \${puedeCostos()?\`
         <th style="text-align:right;font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;padding:6px 10px;border-bottom:1px solid var(--border);background:var(--bg)">Costo actual</th>
         <th style="text-align:center;font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;padding:6px 10px;border-bottom:1px solid var(--border);background:var(--bg)">Editar costo</th>\`
         :''}
@@ -5462,7 +5462,7 @@ function renderProveedores(){
             \${rolActual==='admin'?\`<button class="btn btn-sm" onclick="abrirModalProducto(\${pi})" style="margin-left:6px;padding:2px 7px;font-size:11px">✏️</button> <button class="btn btn-sm btn-danger" onclick="eliminarProducto(\${pi})" style="padding:2px 7px;font-size:11px">🗑️</button>\`:''}
           </td>
           <td style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2)">\${p.medida||'—'}</td>
-        \${rolActual==='admin'?\`<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;font-weight:600">\${p.costo>0?'$'+fmt(p.costo):'<span style="color:var(--text3)">—</span>'}</td>
+        \${puedeCostos()?\`<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;font-weight:600">\${p.costo>0?'$'+fmt(p.costo):'<span style="color:var(--text3)">—</span>'}</td>
           <td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:center">
             <div style="display:flex;gap:4px;justify-content:center;align-items:center">
               <input type="number" id="costo-prov-\${pi}" value="\${p.costo||''}" min="0" step="0.01"
@@ -5504,8 +5504,8 @@ function renderProveedores(){
           \${rolActual==='admin'?\`<span style="font-size:13px;margin-right:4px">\${provSaldoTexto(provSaldo(prov.nombre))}</span><button class="btn btn-sm" onclick="abrirCuentaProv(\${i})">📒 Cuenta</button>\`:''}
           <button class="btn btn-sm btn-primary" onclick="abrirModalPedido(\${i})">📦 Registrar pedido</button>
           \${puedeAsignarProv()?\`<button class="btn btn-sm btn-green" onclick="abrirModalAsignarProd(\${i})">+ Agregar producto</button>\`:''}
+          \${puedeCostos()?\`<button class="btn btn-sm" onclick="abrirPlanilla(\${i})">📝 Planilla de costos</button>\`:''}
           \${rolActual==='admin'?\`
-          <button class="btn btn-sm" onclick="abrirPlanilla(\${i})">📝 Planilla de costos</button>
           <button class="btn btn-sm" onclick="abrirModalProveedor(\${i})">✏️</button>
           <button class="btn btn-sm btn-danger" onclick="eliminarProveedor(\${i})">🗑️</button>\`:''}
         </div>
@@ -5542,7 +5542,7 @@ function abrirModalAsignarProd(provIdx){
   document.getElementById('asignar-prod-search').value='';
   document.getElementById('asignar-prod-idx').value='';
   document.getElementById('asignar-prod-costo').value='';
-  var cEl=document.getElementById('asignar-prod-costo'); if(cEl&&cEl.closest('.form-group')) cEl.closest('.form-group').style.display = rolActual==='admin' ? '' : 'none';
+  var cEl=document.getElementById('asignar-prod-costo'); if(cEl&&cEl.closest('.form-group')) cEl.closest('.form-group').style.display = puedeCostos() ? '' : 'none';
   document.getElementById('asignar-prod-info').style.display='none';
   document.getElementById('asignar-prod-ac').classList.remove('open');
   document.getElementById('modal-asignar-prod').classList.add('open');
@@ -5583,7 +5583,7 @@ function confirmarAsignarProd(){
   const prov=db.proveedores[asignarProvIdx];
   db.productos[idx].proveedor=prov.nombre;
   const costo=parseFloat(document.getElementById('asignar-prod-costo').value)||0;
-  if(costo>0 && rolActual==='admin') db.productos[idx].costo=costo;
+  if(costo>0 && puedeCostos()) db.productos[idx].costo=costo;
   ordenarDatos();
   guardar(); cerrarModales(); renderProveedores();
 }

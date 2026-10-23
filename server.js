@@ -1567,7 +1567,7 @@ function aplicarNivelLogin(emp){
 }
 function seccionesPermitidas(){
   if(rolActual === 'admin') return SECCIONES_ADMIN;
-  if(nivelActual === 'caja') return SECCIONES_EMPLEADO.concat(['caja']);
+  if(nivelActual === 'caja') return SECCIONES_EMPLEADO.concat(['caja','productos']);
   return SECCIONES_EMPLEADO;
 }
 
@@ -1753,11 +1753,11 @@ function aplicarRol(){
   actualizarBarraResumen();
   var bm=document.getElementById('btn-masiva'); if(bm) bm.style.display=esAdmin?'':'none';
   // Ocultar nav items que no corresponden al empleado
-  const itemsAdmin = ['controlstock','listas','caja','ganancia','ventas','contabilidad','config','actividad'];
+  const itemsAdmin = ['productos','controlstock','listas','caja','ganancia','ventas','contabilidad','config','actividad'];
   itemsAdmin.forEach(sec=>{
     document.querySelectorAll(\`.nav-item\`).forEach(el=>{
       if(el.getAttribute('onclick')?.includes(\`'\${sec}'\`)){
-        el.style.display = (esAdmin || (sec==='caja' && nivelActual==='caja')) ? '' : 'none';
+        el.style.display = (esAdmin || ((sec==='caja' || sec==='productos') && nivelActual==='caja')) ? '' : 'none';
       }
     });
   });
@@ -2012,6 +2012,7 @@ function abrirModalProducto(idx) {
   }
 }
 function eliminarProductoDesdeModal(){
+  if(rolActual!=='admin') return;
   if(editIdx===null||editIdx===undefined) return;
   if(!confirm('¿Eliminar este producto?')) return;
   db.productos.splice(editIdx,1);
@@ -2079,7 +2080,7 @@ function guardarProducto() {
   if(typeof renderProductos === 'function') renderProductos();
   if(rp.lineas || rp.listas) alert('Listo: el nombre nuevo se actualizó en ' + rp.boletas + ' boletas (' + rp.lineas + ' líneas) y en ' + rp.listas + ' listas de precios.');
 }
-function eliminarProducto(idx){ if(!confirm('¿Eliminar?'))return; db.productos.splice(idx,1); guardar(); renderProductos(); renderDashboard(); }
+function eliminarProducto(idx){ if(rolActual!=='admin') return; if(!confirm('¿Eliminar?'))return; db.productos.splice(idx,1); guardar(); renderProductos(); renderDashboard(); }
 function estadoBadge(p){ if(p.stock===0)return'<span class="badge badge-out">Sin stock</span>'; if(p.stock<=p.minimo)return'<span class="badge badge-low">Stock bajo</span>'; return'<span class="badge badge-ok">OK</span>'; }
 function renderProductos(filtro=''){
   const todos=db.productos.filter(p=>!filtro||p.nombre.toLowerCase().includes(filtro.toLowerCase())||(p.codigo||'').toLowerCase().includes(filtro.toLowerCase()));
@@ -2097,7 +2098,7 @@ function renderProductos(filtro=''){
       <td class="col-costo"\${rolActual!=='admin'?' style="display:none"':''}>$\${fmt(p.costo)}</td>
       <td><strong>$\${fmt(p.precio)}</strong></td>
       <td>\${p.stock} <span style="font-size:11px;color:var(--text3)">\${p.unidad}</span>\${p.guardado>0?'<div style="font-size:11px;color:var(--text3)">+'+p.guardado+' guardados</div>':''}</td><td>\${estadoBadge(p)}</td>
-      <td style="white-space:nowrap"><button class="btn btn-sm" onclick="abrirModalProducto(\${i})">✏️</button> <button class="btn btn-sm btn-danger" onclick="eliminarProducto(\${i})">🗑️</button></td>
+      <td style="white-space:nowrap"><button class="btn btn-sm" onclick="abrirModalProducto(\${i})">✏️</button> \${rolActual==='admin'?\`<button class="btn btn-sm btn-danger" onclick="eliminarProducto(\${i})">🗑️</button>\`:''}</td>
     </tr>\`;
   };
 

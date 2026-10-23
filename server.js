@@ -1899,6 +1899,24 @@ function armarDelta(){
   });
   return { hay: hay, tablas: tablas, nuevoSnap: nuevoSnap };
 }
+// Si dos personas crearon boletas a la vez con el mismo numero, el servidor le da otro numero a la ultima y avisa
+function aplicarRenumeradas(lista, delta){
+  var snapP = null; try{ snapP = JSON.parse(delta.nuevoSnap.presupuestos); }catch(e){}
+  var msgs = [];
+  lista.forEach(function(x){
+    var b = db.presupuestos.find(function(q){ return q.uid === x.uid; }); if(!b) return;
+    b.numero = x.a;
+    db.presupuestos.forEach(function(o){ (o.pagos || []).forEach(function(g){ if(g.nota === 'Traspasado a la boleta #' + x.de) g.nota = 'Traspasado a la boleta #' + x.a; }); });
+    if(snapP) snapP.forEach(function(q){ if(q && q.uid === x.uid) q.numero = x.a; });
+    if(!db.contador) db.contador = {};
+    db.contador.presupuesto = Math.max(db.contador.presupuesto || 1, x.a + 1);
+    msgs.push('La boleta de ' + (b.cliente ? b.cliente.nombre : 'Consumidor final') + ' quedó con el número #' + x.a + ' (el #' + x.de + ' lo había usado otra persona al mismo tiempo).');
+  });
+  if(snapP) delta.nuevoSnap.presupuestos = JSON.stringify(snapP);
+  try{ localStorage.setItem('hap_db', JSON.stringify(db)); }catch(e){}
+  try{ renderPresupuestos(); }catch(e){}
+  if(msgs.length) alert(msgs.join(String.fromCharCode(10)) + String.fromCharCode(10) + String.fromCharCode(10) + 'Si ya la imprimiste, corregí el número en el papel.');
+}
 async function guardar() {
   // 1. Siempre guardar en local primero
   localStorage.setItem('hap_db', JSON.stringify(db));
@@ -1916,7 +1934,12 @@ async function guardar() {
       body: JSON.stringify({ tables: delta.tablas })
     });
     if(!res.ok) console.warn('Error servidor:', res.status);
-    else { console.log('✅ Guardado en servidor'); guardadoOk = true; snapSync = delta.nuevoSnap; }
+    else {
+      console.log('✅ Guardado en servidor'); guardadoOk = true;
+      var rj = null; try{ rj = await res.json(); }catch(e){}
+      if(rj && rj.renumeradas && rj.renumeradas.length){ try{ aplicarRenumeradas(rj.renumeradas, delta); }catch(e){ console.warn('renumerar:', e); } }
+      snapSync = delta.nuevoSnap;
+    }
   } catch(e) {
     console.warn('Sin internet, solo local');
   } finally {
@@ -3426,7 +3449,7 @@ function guardarPresupuesto(){
   const deuda=parseFloat(document.getElementById('pres-deuda').value)||0;
   if(editPresIdx !== null){ guardarEdicionPresupuesto(lineas, subtotal, cliente, deuda); return; }
   const num=db.contador.presupuesto||1; db.contador.presupuesto=num+1;
-  db.presupuestos.unshift({ numero:num, fecha:document.getElementById('pres-fecha').value,
+  db.presupuestos.unshift({ numero:num, uid:'b'+Date.now().toString(36)+Math.random().toString(36).slice(2,8), fecha:document.getElementById('pres-fecha').value,
     validez:'', cliente:cliente?{...cliente}:null,
     obs:document.getElementById('pres-obs').value.trim(), lineas, subtotal, deuda, total:subtotal+deuda, estado:'Pendiente' });
   var rStock = descontarStockBoleta(db.presupuestos[0]);
@@ -6626,6 +6649,21 @@ function aplicarDelta(actual, d){
   });
   return orden.filter(k => k in mapa).map(k => mapa[k]);
 }
+// Dos personas pueden crear boletas a la vez con el mismo numero: la que llega segunda recibe otro numero (antes pisaba a la primera)
+function renumerarColisiones(actual, d){
+  const out = [], porNum = {}; let max = 0;
+  (Array.isArray(actual) ? actual : []).forEach(r => { if(!r) return; porNum[String(r.numero)] = r; if(typeof r.numero === 'number' && r.numero > max) max = r.numero; });
+  (d.upserts || []).forEach(r => { if(r && typeof r.numero === 'number' && r.numero > max) max = r.numero; });
+  (d.upserts || []).forEach(r => {
+    if(!r || !r.uid) return;
+    const ex = porNum[String(r.numero)];
+    if(ex && ex.uid !== r.uid){
+      const de = r.numero; max += 1; r.numero = max; out.push({ uid: r.uid, de: de, a: max });
+      porNum[String(max)] = r;
+    } else porNum[String(r.numero)] = r;
+  });
+  return out;
+}
 async function leerTabla(t){
   const { data, error } = await supabase.from('hap_data').select('valor').eq('tabla', t).maybeSingle();
   if(error) throw new Error(error.message);
@@ -6831,7 +6869,7 @@ app.post('/api/db/delta', requerirAuth, async (req, res) => {
   try {
     const tables = (req.body && req.body.tables) || {};
     const nivel = req.user.nivel, admin = esAdminNivel(nivel);
-    const ignoradas = [];
+    const ignoradas = [], renumeradas = [];
     await conLock(async () => {
       for(const t of Object.keys(tables)){
         let d = tables[t] || {};
@@ -6868,6 +6906,16 @@ app.post('/api/db/delta', requerirAuth, async (req, res) => {
         if(d.mode === 'records'){
           const actual = await leerTabla(t);
           if(t === 'caja') cajaStampIds(actual);
+          if(t === 'presupuestos'){
+            const nuevasNum = renumerarColisiones(actual, d);
+            if(nuevasNum.length){
+              renumeradas.push.apply(renumeradas, nuevasNum);
+              const ct = (await leerTabla('contador')) || {};
+              const mx = Math.max.apply(null, nuevasNum.map(x => x.a)) + 1;
+              ct.presupuesto = Math.max(ct.presupuesto || 1, mx);
+              await escribirTabla('contador', ct);
+            }
+          }
           await escribirTabla(t, aplicarDelta(actual, d));
         } else if(t === 'contador'){
           const actual = (await leerTabla(t)) || {};
@@ -6883,7 +6931,7 @@ app.post('/api/db/delta', requerirAuth, async (req, res) => {
       }
     });
     respaldoDiario().catch(e => console.error('respaldo:', e.message));
-    res.json({ ok: true, ignoradas });
+    res.json({ ok: true, ignoradas, renumeradas });
   } catch (e) { console.error('delta error:', e.message); res.status(500).json({ error: 'Error al guardar' }); }
 });
 

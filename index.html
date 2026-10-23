@@ -1885,6 +1885,24 @@ function armarDelta(){
   });
   return { hay: hay, tablas: tablas, nuevoSnap: nuevoSnap };
 }
+// Si dos personas crearon boletas a la vez con el mismo numero, el servidor le da otro numero a la ultima y avisa
+function aplicarRenumeradas(lista, delta){
+  var snapP = null; try{ snapP = JSON.parse(delta.nuevoSnap.presupuestos); }catch(e){}
+  var msgs = [];
+  lista.forEach(function(x){
+    var b = db.presupuestos.find(function(q){ return q.uid === x.uid; }); if(!b) return;
+    b.numero = x.a;
+    db.presupuestos.forEach(function(o){ (o.pagos || []).forEach(function(g){ if(g.nota === 'Traspasado a la boleta #' + x.de) g.nota = 'Traspasado a la boleta #' + x.a; }); });
+    if(snapP) snapP.forEach(function(q){ if(q && q.uid === x.uid) q.numero = x.a; });
+    if(!db.contador) db.contador = {};
+    db.contador.presupuesto = Math.max(db.contador.presupuesto || 1, x.a + 1);
+    msgs.push('La boleta de ' + (b.cliente ? b.cliente.nombre : 'Consumidor final') + ' quedó con el número #' + x.a + ' (el #' + x.de + ' lo había usado otra persona al mismo tiempo).');
+  });
+  if(snapP) delta.nuevoSnap.presupuestos = JSON.stringify(snapP);
+  try{ localStorage.setItem('hap_db', JSON.stringify(db)); }catch(e){}
+  try{ renderPresupuestos(); }catch(e){}
+  if(msgs.length) alert(msgs.join(String.fromCharCode(10)) + String.fromCharCode(10) + String.fromCharCode(10) + 'Si ya la imprimiste, corregí el número en el papel.');
+}
 async function guardar() {
   // 1. Siempre guardar en local primero
   localStorage.setItem('hap_db', JSON.stringify(db));
@@ -1902,7 +1920,12 @@ async function guardar() {
       body: JSON.stringify({ tables: delta.tablas })
     });
     if(!res.ok) console.warn('Error servidor:', res.status);
-    else { console.log('✅ Guardado en servidor'); guardadoOk = true; snapSync = delta.nuevoSnap; }
+    else {
+      console.log('✅ Guardado en servidor'); guardadoOk = true;
+      var rj = null; try{ rj = await res.json(); }catch(e){}
+      if(rj && rj.renumeradas && rj.renumeradas.length){ try{ aplicarRenumeradas(rj.renumeradas, delta); }catch(e){ console.warn('renumerar:', e); } }
+      snapSync = delta.nuevoSnap;
+    }
   } catch(e) {
     console.warn('Sin internet, solo local');
   } finally {
@@ -3449,7 +3472,7 @@ function guardarPresupuesto(){
   const deuda=parseFloat(document.getElementById('pres-deuda').value)||0;
   if(editPresIdx !== null){ guardarEdicionPresupuesto(lineas, subtotal, cliente, deuda); return; }
   const num=db.contador.presupuesto||1; db.contador.presupuesto=num+1;
-  db.presupuestos.unshift({ numero:num, fecha:document.getElementById('pres-fecha').value,
+  db.presupuestos.unshift({ numero:num, uid:'b'+Date.now().toString(36)+Math.random().toString(36).slice(2,8), fecha:document.getElementById('pres-fecha').value,
     validez:'', cliente:cliente?{...cliente}:null,
     obs:document.getElementById('pres-obs').value.trim(), lineas, subtotal, deuda, total:subtotal+deuda, estado:'Pendiente' });
   var rStock = descontarStockBoleta(db.presupuestos[0]);

@@ -1168,6 +1168,21 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
   </div>
 </div>
 <!-- MODAL COBRO TOTAL -->
+<div class="modal-backdrop" id="modal-medio">
+  <div class="modal" style="max-width:420px">
+    <h3>Cambiar medio de pago</h3>
+    <div id="medio-info" style="font-size:13px;color:var(--text2);margin-bottom:12px"></div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label>Pagó con</label>
+      <select id="medio-nuevo"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta débito</option><option>Tarjeta crédito</option></select>
+    </div>
+    <label id="medio-boleta-wrap" style="display:none;font-size:13px;align-items:center;gap:8px;margin-bottom:6px"><input type="checkbox" id="medio-boleta" checked> Cambiar también en el pago de la boleta <span id="medio-boleta-num"></span></label>
+    <div class="modal-footer">
+      <button class="btn" onclick="cerrarModales()">Cancelar</button>
+      <button class="btn btn-green" onclick="confirmarCambioMedio()">✅ Guardar</button>
+    </div>
+  </div>
+</div>
 <div class="modal-backdrop" id="modal-cobro">
   <div class="modal" style="max-width:420px">
     <h3>Cobrar boleta completa</h3>
@@ -5006,9 +5021,9 @@ function renderCaja(){
     <td style="font-size:12px;color:var(--text2)">\${m.medio}</td>
     <td style="color:var(--green);font-weight:600">\${m.tipo==='entrada'?'$'+fmt(m.monto):'—'}</td>
     <td style="color:var(--red);font-weight:600">\${m.tipo==='salida'?'$'+fmt(m.monto):'—'}</td>
-    <td><button class="btn btn-sm btn-danger" onclick="eliminarMovimiento(\${i})">🗑️</button></td>
+    <td style="white-space:nowrap"><button class="btn btn-sm btn-editmedio" onclick="abrirCambioMedio(\${i})" title="Cambiar el medio de pago (efectivo / transferencia)">✏️</button> <button class="btn btn-sm btn-danger" onclick="eliminarMovimiento(\${i})">🗑️</button></td>
   </tr>\`).join('');
-  if(rolActual!=='admin') t.querySelectorAll('.btn-danger').forEach(function(b){ b.remove(); });
+  if(rolActual!=='admin') t.querySelectorAll('.btn-danger,.btn-editmedio').forEach(function(b){ b.remove(); });
 }
 
 async function guardarCostoProv(prodIdx){
@@ -5996,6 +6011,41 @@ function confirmarPedido(){
   alert((sumarStock?'✅ Stock actualizado ('+lineas.length+' producto'+(lineas.length>1?'s':'')+'). ':'✅ Pedido registrado. ')+(esAdmin?(total>0?'Se sumaron $'+fmt(total)+' a la deuda con '+prov.nombre+'.':'No pusiste total, así que no se cargó deuda.'):''));
 }
 
+var medioIdx = null;
+function boletaDeMovimiento(m){
+  var r = /boleta #(\\d+)/i.exec(m.desc || ''); if(!r) return null;
+  return db.presupuestos.find(function(p){ return p.numero === parseInt(r[1], 10); }) || null;
+}
+function pagoDeMovimiento(m, p){
+  if(!p) return null;
+  return (p.pagos || []).find(function(g){ return !g.traspaso && g.forma === m.medio && Math.abs((g.monto || 0) - m.monto) < 0.01; }) || null;
+}
+function abrirCambioMedio(i){
+  if(rolActual !== 'admin') return;
+  var m = db.caja[i]; if(!m) return;
+  medioIdx = i;
+  document.getElementById('medio-info').textContent = m.fecha + ' · ' + (m.tipo === 'entrada' ? 'Entrada' : 'Salida') + ' $' + fmt(m.monto) + ' · ' + (m.desc || '') + ' · hoy figura como: ' + m.medio;
+  document.getElementById('medio-nuevo').value = m.medio === 'Efectivo' ? 'Transferencia' : 'Efectivo';
+  var p = boletaDeMovimiento(m), g = pagoDeMovimiento(m, p);
+  var wrap = document.getElementById('medio-boleta-wrap');
+  wrap.style.display = g ? 'flex' : 'none';
+  document.getElementById('medio-boleta').checked = true;
+  document.getElementById('medio-boleta-num').textContent = g ? '(#' + p.numero + ')' : '';
+  document.getElementById('modal-medio').classList.add('open');
+}
+function confirmarCambioMedio(){
+  if(rolActual !== 'admin') return;
+  var m = db.caja[medioIdx]; if(!m) return;
+  var nuevo = document.getElementById('medio-nuevo').value;
+  if(nuevo === m.medio){ cerrarModales(); return; }
+  var viejo = m.medio, p = boletaDeMovimiento(m), g = pagoDeMovimiento(m, p);
+  if(g && document.getElementById('medio-boleta').checked) g.forma = nuevo;
+  m.medio = nuevo;
+  registrarActividad('caja', 'Cambió el medio de un movimiento de caja', '$' + fmt(m.monto) + ' ' + (m.desc || '') + ': ' + viejo + ' → ' + nuevo);
+  medioIdx = null;
+  guardar().then(function(ok){ if(!ok) alert('No se pudo guardar en el servidor. No refresques la página; se reintenta solo.'); });
+  cerrarModales(); renderCaja();
+}
 function eliminarMovimiento(idx){
   if(rolActual!=='admin'){ alert('No tenés permiso para eliminar movimientos de caja.'); return; }
   if(!confirm('¿Eliminar este movimiento de la caja?'))return;

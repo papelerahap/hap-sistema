@@ -3856,6 +3856,12 @@ function xlsxDetalle(r, provFiltro){
       fila(f, [i === 0 ? t(0, f, fmtFechaAR(b.f), 3) : t(0, f, '', 3), i === 0 ? t(1, f, b.p.cliente.nombre, 3) : t(1, f, '', 3), i === 0 ? n(2, f, b.p.numero, 4) : t(2, f, '', 3), n(3, f, cant, 4), t(4, f, l.nombre || '', 3), n(5, f, precio, 5), n(6, f, imp, 5)]);
       f++;
     });
+    var deudaAnt = b.p.deuda || 0;
+    if(!provFiltro && Math.abs(deudaAnt) > 0.01){
+      tot += deudaAnt;
+      fila(f, vacias(0, 3, f, 3).concat([t(4, f, deudaAnt > 0 ? 'DEUDA ANTERIOR' : 'SALDO A FAVOR ANTERIOR', 3), t(5, f, '', 3), n(6, f, deudaAnt, 5)]));
+      f++;
+    }
     totalGral += tot;
     var pagosReales = (b.p.pagos || []).filter(function(g){ return !g.traspaso; });
     var pagado = pagosReales.reduce(function(a, g){ return a + (g.monto || 0); }, 0);

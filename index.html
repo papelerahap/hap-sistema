@@ -3858,7 +3858,7 @@ function detalleBoletasDatos(r, provFiltro){
     if(!lineas.length) return;
     boletas.push({ p: p, f: f, lineas: lineas });
   });
-  boletas.sort(function(a, b){ return a.f.localeCompare(b.f) || (a.p.numero - b.p.numero); });
+  boletas.sort(function(a, b){ return normNombre(a.p.cliente.nombre).localeCompare(normNombre(b.p.cliente.nombre), 'es') || a.f.localeCompare(b.f) || (a.p.numero - b.p.numero); });
   return boletas;
 }
 function xlsxDetalle(r, provFiltro){

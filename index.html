@@ -2879,6 +2879,13 @@ function guardarEdicionPresupuesto(lineas, subtotal, cliente, deuda){
   if(pagado > 0 && Math.abs(nuevoTotal - p.total) > 0.005){
     if(!confirm('Esta boleta ya tiene pagos por $' + fmt(pagado) + '. Los pagos se mantienen y el saldo se recalcula con el total nuevo ($' + fmt(nuevoTotal) + '). ¿Guardar los cambios?')) return;
   }
+  var ligadas = db.presupuestos.filter(function(x){ return x.traspasada_a === p.numero && x !== p; });
+  var liberadas = [];
+  if(ligadas.length && Math.abs(deuda) <= 0.01){
+    var NLx = String.fromCharCode(10);
+    if(!confirm('Esta boleta traía la deuda anterior de las boletas ' + ligadas.map(function(x){ return '#' + x.numero; }).join(', ') + '.' + NLx + NLx + 'Al sacarla, esas boletas vuelven a figurar como deuda aparte en Deudores, sin ninguna relación con esta boleta. ¿Seguir?')) return;
+    liberadas = deshacerTraspasos(p);
+  }
   var totalAntes = p.total;
   var textoCliente = document.getElementById('pres-cliente-input').value.trim();
   if(cliente) p.cliente = Object.assign({}, cliente);
@@ -2893,7 +2900,7 @@ function guardarEdicionPresupuesto(lineas, subtotal, cliente, deuda){
   p.deuda = deuda;
   p.total = nuevoTotal;
   var rStockE = teniaStock && p.estado !== 'Rechazado' ? descontarStockBoleta(p) : {faltan:[],negativos:[]};
-  registrarActividad('presupuesto', 'Editó boleta #' + p.numero, 'Cliente: ' + (p.cliente ? p.cliente.nombre : 'Consumidor final') + ' | Total: $' + fmt(totalAntes) + ' → $' + fmt(nuevoTotal));
+  registrarActividad('presupuesto', 'Editó boleta #' + p.numero, 'Cliente: ' + (p.cliente ? p.cliente.nombre : 'Consumidor final') + ' | Total: $' + fmt(totalAntes) + ' → $' + fmt(nuevoTotal) + (liberadas.length ? ' | Deuda separada de esta boleta: ' + liberadas.map(function(x){ return '#' + x.numero; }).join(', ') : ''));
   editPresIdx = null;
   presClienteSnapshot = null;
   cerrarModales();

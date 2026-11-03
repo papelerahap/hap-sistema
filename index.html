@@ -967,7 +967,8 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
     <div id="actividad" class="section">
       <div class="section-header">
         <h2>Registro de actividad 📋</h2>
-        <button class="btn btn-danger btn-sm" onclick="if(confirm('¿Borrar todo el historial?')){db.actividad=[];guardar();renderActividad();}">🗑️ Limpiar historial</button>
+        <div style="display:flex;gap:8px"><button class="btn btn-green btn-sm" onclick="abrirHistorial()" title="Boletas y movimientos borrados o pisados, para restaurarlos">🛟 Recuperar boletas borradas</button>
+        <button class="btn btn-danger btn-sm" onclick="if(confirm('¿Borrar todo el historial?')){db.actividad=[];guardar();renderActividad();}">🗑️ Limpiar historial</button></div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
         <button class="filtro-btn active" onclick="setFiltroActividad('',this)">Todo</button>
@@ -1157,6 +1158,14 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
       <button class="btn" onclick="cerrarModales()">Cancelar</button>
       <button class="btn btn-green" onclick="confirmarCambioMedio()">✅ Guardar</button>
     </div>
+  </div>
+</div>
+<div class="modal-backdrop" id="modal-historial">
+  <div class="modal" style="max-width:860px;width:96%">
+    <h3>🛟 Boletas y movimientos borrados o pisados</h3>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Acá queda la versión anterior de todo lo que se borra o se pisa, con quién lo hizo. Podés restaurarlo. Se guardan los últimos 400.</div>
+    <div style="max-height:55vh;overflow:auto"><table style="width:100%"><thead><tr><th>Cuándo</th><th>Quién</th><th>Qué</th><th>Detalle</th><th></th></tr></thead><tbody id="historial-tabla"></tbody></table></div>
+    <div class="modal-footer"><button class="btn" onclick="cerrarModales()">Cerrar</button></div>
   </div>
 </div>
 <div class="modal-backdrop" id="modal-cobro">
@@ -1798,11 +1807,127 @@ function cerrarSesion(){
 
 const API = ''; // misma dirección desde la que se abrió la página
 var authToken = null, loginInfo = null;
+// ===== Guardado seguro: estado en pantalla, recuperacion de pendientes, historial =====
+var PROTOCOLO = '2';
+var avisoVersionMostrado = false;
+var tsGuardado = 0;
+function guardarPendiente(delta){
+  try{ localStorage.setItem('hap_pend', JSON.stringify(delta.tablas)); }catch(e){}
+}
+function recuperarPendientes(){
+  var raw = null; try{ raw = localStorage.getItem('hap_pend'); }catch(e){}
+  if(!raw) return 0;
+  var pend = null; try{ pend = JSON.parse(raw); }catch(e){}
+  try{ localStorage.removeItem('hap_pend'); }catch(e){}
+  if(!pend) return 0;
+  var n = 0;
+  ['presupuestos', 'caja', 'prov_movs'].forEach(function(t){
+    var d = pend[t]; if(!d || d.mode !== 'records') return;
+    var key = d.key; if(!db[t]) db[t] = [];
+    var arr = db[t];
+    (d.upserts || []).forEach(function(r){
+      if(!r || r[key] === undefined || r[key] === null) return;
+      var ex = arr.find(function(x){ return String(x[key]) === String(r[key]); });
+      if(t === 'presupuestos'){
+        if(!ex){ arr.unshift(r); n++; }
+        else if(!(r.uid && ex.uid === r.uid) && normNombre(ex.cliente && ex.cliente.nombre) !== normNombre(r.cliente && r.cliente.nombre)){
+          // otra boleta ya usaba ese numero: la que quedo sin guardar entra con un numero nuevo
+          if(!db.contador) db.contador = {};
+          var mx = 0; arr.forEach(function(x){ if(typeof x.numero === 'number' && x.numero > mx) mx = x.numero; });
+          r.numero = Math.max(db.contador.presupuesto || 1, mx + 1); db.contador.presupuesto = r.numero + 1;
+          if(!r.uid) r.uid = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+          arr.unshift(r); n++;
+        }
+      } else if(!ex){ arr.push(r); n++; }
+    });
+  });
+  if(n){
+    try{ localStorage.setItem('hap_db', JSON.stringify(db)); }catch(e){}
+    guardar();
+    alert('Se recuperaron ' + n + ' cambio' + (n !== 1 ? 's' : '') + ' (boletas o movimientos) que habían quedado sin guardar en esta computadora. Revisalos en Presupuestos y en Caja.');
+  }
+  return n;
+}
+function avisarVersionVieja(){
+  if(avisoVersionMostrado) return; avisoVersionMostrado = true;
+  alert('Hay una versión nueva del sistema y esta pantalla quedó vieja, por eso NO se guardó lo último.' + String.fromCharCode(10) + String.fromCharCode(10) + 'Apretá Ctrl+Shift+R (o cerrá y abrí la página) e ingresá de nuevo: lo que quedó sin guardar se recupera solo.');
+}
+function estadoGuardado(){
+  var el = document.getElementById('estado-guardado');
+  if(!el){
+    el = document.createElement('div'); el.id = 'estado-guardado';
+    el.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:9000;padding:6px 12px;border-radius:100px;font-size:12px;font-weight:700;box-shadow:0 2px 10px rgba(0,0,0,.2);display:none';
+    document.body.appendChild(el);
+  }
+  if(!rolActual){ el.style.display = 'none'; return; }
+  var texto, bg, col;
+  if(guardandoEnServidor){ texto = '⏳ Guardando...'; bg = '#e6f1fb'; col = '#0C447C'; }
+  else if(ultimoGuardadoOk === false || servidorConectado === false){ texto = '⚠️ SIN GUARDAR: no cierres ni refresques'; bg = '#FCEBEB'; col = '#A32D2D'; }
+  else if(Date.now() - tsGuardado < 4000){ texto = '✅ Guardado'; bg = '#EAF3DE'; col = '#3B6D11'; }
+  else { el.style.display = 'none'; return; }
+  el.textContent = texto; el.style.background = bg; el.style.color = col; el.style.display = 'block';
+}
+setInterval(estadoGuardado, 1000);
+window.addEventListener('beforeunload', function(e){
+  if(rolActual && (guardandoEnServidor || ultimoGuardadoOk === false)){ e.preventDefault(); e.returnValue = ''; return ''; }
+});
+// ----- Historial: boletas y movimientos borrados o pisados -----
+var historialLista = [];
+async function abrirHistorial(){
+  if(rolActual !== 'admin') return;
+  var cont = document.getElementById('historial-tabla');
+  cont.innerHTML = '<tr><td colspan="5">Cargando...</td></tr>';
+  document.getElementById('modal-historial').classList.add('open');
+  try{
+    var res = await apiFetch(API + '/api/historial');
+    historialLista = res.ok ? await res.json() : [];
+  }catch(e){ historialLista = []; }
+  var nombres = { presupuestos: 'Boleta', caja: 'Caja', prov_movs: 'Proveedor', productos: 'Producto', clientes: 'Cliente' };
+  if(!historialLista.length){ cont.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:1.5rem">No hay nada borrado ni pisado todavía.</td></tr>'; return; }
+  cont.innerHTML = historialLista.slice(0, 200).map(function(h, i){
+    var a = h.antes || {}, det = '';
+    if(h.t === 'presupuestos') det = '#' + a.numero + ' · ' + (a.cliente ? a.cliente.nombre : 'Consumidor final') + ' · $' + fmt(a.total) + ' · ' + (a.fecha || '');
+    else if(h.t === 'caja' || h.t === 'prov_movs') det = (a.desc || a.proveedor || '') + ' · $' + fmt(a.monto) + ' · ' + (a.medio || '') + ' · ' + (a.fecha || '');
+    else det = a.nombre || '';
+    var cuando = h.ts ? new Date(h.ts).toLocaleString('es-AR') : '';
+    return '<tr><td style="font-size:12px">' + ctbEsc(cuando) + '</td><td>' + ctbEsc(h.user || '') + '</td><td>' + (nombres[h.t] || h.t) + ' ' + (h.tipo === 'pisada' ? '(pisada por otra)' : '(borrada)') + '</td><td style="font-size:12px">' + ctbEsc(det) + '</td><td><button class="btn btn-sm btn-green" onclick="restaurarHistorial(' + i + ')">↩ Restaurar</button></td></tr>';
+  }).join('');
+}
+function restaurarHistorial(i){
+  if(rolActual !== 'admin') return;
+  var h = historialLista[i]; if(!h || !h.antes) return;
+  var key = CLAVES_REG[h.t]; if(!key) return;
+  var r = JSON.parse(JSON.stringify(h.antes));
+  if(!db[h.t]) db[h.t] = [];
+  var arr = db[h.t];
+  var existe = arr.some(function(x){ return String(x[key]) === String(r[key]); });
+  var aviso = '';
+  if(h.t === 'presupuestos'){
+    if(existe){
+      var mx = 0; arr.forEach(function(x){ if(typeof x.numero === 'number' && x.numero > mx) mx = x.numero; });
+      if(!db.contador) db.contador = {};
+      var viejoNum = r.numero; r.numero = Math.max(db.contador.presupuesto || 1, mx + 1); db.contador.presupuesto = r.numero + 1;
+      aviso = ' Como el #' + viejoNum + ' ya lo usa otra boleta, se restauró con el número #' + r.numero + '.';
+    }
+    r.uid = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    arr.unshift(r);
+  } else {
+    if(existe) r[key] = (h.t === 'caja' ? nuevoIdCaja() : 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+    arr.push(r);
+  }
+  registrarActividad('presupuesto', 'Restauró del historial', h.t + ' ' + (r.numero || r.desc || r.nombre || ''));
+  historialLista.splice(i, 1);
+  guardar(); try{ renderPresupuestos(); renderCaja(); renderDeudores(); }catch(e){}
+  alert('Restaurado.' + aviso + ' Si era una boleta, revisá que el stock esté bien: restaurar no vuelve a descontar productos.');
+  abrirHistorial();
+}
 async function apiFetch(url, opts){
   opts = opts || {};
   opts.headers = Object.assign({}, opts.headers || {});
   if(authToken) opts.headers['Authorization'] = 'Bearer ' + authToken;
+  opts.headers['X-Protocolo'] = PROTOCOLO;
   const res = await fetch(url, opts);
+  if(res && res.status === 426) avisarVersionVieja();
   if(res && res.status === 401 && authToken){
     authToken = null;
     alert('Tu sesión venció. Volvé a ingresar. Lo que ya se guardó no se pierde.');
@@ -1864,7 +1989,17 @@ function avisoServidor(ok){
   }
 }
 var snapSync = null;
-var CLAVES_REG = { presupuestos: 'numero', caja: 'id', prov_movs: 'id', recordatorios: 'id' };
+var CLAVES_REG = { presupuestos: 'numero', caja: 'id', prov_movs: 'id', recordatorios: 'id', productos: 'id', clientes: 'id' };
+function stampIdsLegacy(arr, prefijo, sigFn){
+  var vistos = {};
+  (arr || []).forEach(function(r){
+    if(!r || r.id) return;
+    var sig = sigFn(r); vistos[sig] = (vistos[sig] || 0) + 1;
+    r.id = prefijo + '|' + sig + '|' + vistos[sig];
+  });
+}
+function clientesStampIds(arr){ stampIdsLegacy(arr, 'C', function(c){ return normNombre(c.nombre); }); }
+function productosStampIds(arr){ stampIdsLegacy(arr, 'P', function(p){ return normNombre(p.nombre) + '|' + normNombre(p.medida) + '|' + String(p.codigo || ''); }); }
 function cajaStampIds(arr){
   var vistos = {};
   (arr || []).forEach(function(m){
@@ -1876,13 +2011,13 @@ function cajaStampIds(arr){
 }
 function nuevoIdCaja(){ return 'm' + Date.now() + Math.random().toString(36).slice(2, 7); }
 function tomarSnapshot(){
-  cajaStampIds(db.caja);
+  cajaStampIds(db.caja); clientesStampIds(db.clientes); productosStampIds(db.productos);
   snapSync = {};
   Object.keys(db).forEach(function(t){ snapSync[t] = JSON.stringify(db[t]); });
 }
 // Arma solo lo que cambió desde la última vez que se sincronizó con el servidor
 function armarDelta(){
-  cajaStampIds(db.caja);
+  cajaStampIds(db.caja); clientesStampIds(db.clientes); productosStampIds(db.productos);
   var tablas = {}, nuevoSnap = {}, hay = false;
   Object.keys(db).forEach(function(t){
     var js = JSON.stringify(db[t]); nuevoSnap[t] = js;
@@ -1936,15 +2071,16 @@ async function guardar() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tables: delta.tablas })
     });
-    if(!res.ok) console.warn('Error servidor:', res.status);
+    if(!res.ok){ console.warn('Error servidor:', res.status); guardarPendiente(delta); }
     else {
-      console.log('✅ Guardado en servidor'); guardadoOk = true;
+      console.log('✅ Guardado en servidor'); guardadoOk = true; tsGuardado = Date.now();
+      try{ localStorage.removeItem('hap_pend'); }catch(e){}
       var rj = null; try{ rj = await res.json(); }catch(e){}
       if(rj && rj.renumeradas && rj.renumeradas.length){ try{ aplicarRenumeradas(rj.renumeradas, delta); }catch(e){ console.warn('renumerar:', e); } }
       snapSync = delta.nuevoSnap;
     }
   } catch(e) {
-    console.warn('Sin internet, solo local');
+    console.warn('Sin internet, solo local'); guardarPendiente(delta);
   } finally {
     guardandoEnServidor = false;
   }
@@ -1956,11 +2092,14 @@ async function cargarDesdeServidor() {
   if(guardandoEnServidor) {
     await new Promise(r => setTimeout(r, 1000));
   }
+  const inicioPull = Date.now();
   try {
     const res = await apiFetch(`${API}/api/db/all`);
     if(!res.ok){ avisoServidor(false); return; }
     const data = await res.json();
     avisoServidor(true);
+    // si mientras tanto se guardo algo, lo que bajo ya quedo viejo: se descarta y se baja de nuevo en el proximo ciclo
+    if(guardandoEnServidor || tsGuardado > inicioPull) return;
     // Si hay cambios mios que todavia no llegaron al servidor, no los piso con lo que baje
     if(snapSync !== null && armarDelta().hay) return;
     if(data && data.productos && data.productos.length > 0) {
@@ -1981,6 +2120,7 @@ async function cargarDesdeServidor() {
       tomarSnapshot();
       localStorage.setItem('hap_db', JSON.stringify(db));
       console.log('✅ Datos del servidor cargados');
+      recuperarPendientes();
     } else {
       // Servidor vacío — subir los datos locales al servidor
       console.log('⬆️ Servidor vacío, subiendo datos locales...');
@@ -2438,8 +2578,9 @@ function guardarCliente(){
     if(viejo && viejo.nombre !== datos.nombre){
       (db.presupuestos || []).forEach(function(p){ if(p.cliente && p.cliente.nombre === viejo.nombre) p.cliente.nombre = datos.nombre; });
     }
+    if(viejo && viejo.id) datos.id = viejo.id;
     db.clientes[editClienteIdx] = datos;
-  } else db.clientes.push(datos);
+  } else { datos.id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); db.clientes.push(datos); }
   guardar(); cerrarModales(); renderClientes(); renderDashboard();
 }
 function eliminarCliente(idx){if(!confirm('¿Eliminar?'))return; db.clientes.splice(idx,1); guardar(); renderClientes(); renderDashboard();}
@@ -2611,7 +2752,8 @@ let listaClienteActual = null;
 function nuevoIdProd(){ return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function asegurarIdsProductos(){
   var n = 0;
-  db.productos.forEach(function(p){ if(!p.id){ p.id = nuevoIdProd(); n++; } });
+  var antes = db.productos.filter(function(p){ return !p.id; }).length;
+  productosStampIds(db.productos); n = antes;
   return n;
 }
 function vincularLineasAProductos(){

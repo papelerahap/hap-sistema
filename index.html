@@ -3740,13 +3740,41 @@ function cambiarEstado(idx,val){
   guardar();
 }
 
+function deshacerTraspasos(p){
+  var viejas = db.presupuestos.filter(function(x){ return x.traspasada_a === p.numero && x !== p; });
+  viejas.forEach(function(x){
+    x.pagos = (x.pagos || []).filter(function(g){ return !(g.traspaso && g.nota === 'Traspasado a la boleta #' + p.numero); });
+    delete x.traspasada_a;
+    if(saldoPendienteBoleta(x) > 0.01) x.estado = 'Pendiente';
+  });
+  return viejas;
+}
+function movimientosCajaDeBoleta(p){
+  var re = new RegExp('boleta #' + p.numero + '([^0-9]|$)', 'i');
+  return (db.caja || []).filter(function(m){ return m.tipo === 'entrada' && re.test(m.desc || ''); });
+}
 function eliminarPresupuesto(idx){
-  if(!confirm('¿Eliminar?'))return;
-  const p=db.presupuestos[idx];
-  registrarActividad('eliminacion',`Eliminó boleta #${p.numero}`,`Cliente: ${p.cliente?.nombre||'Consumidor final'} | Total: $${fmt(p.total)}`);
+  const p=db.presupuestos[idx]; if(!p) return;
+  var NL = String.fromCharCode(10);
+  var viejas = db.presupuestos.filter(function(x){ return x.traspasada_a === p.numero && x !== p; });
+  var reales = (p.pagos || []).filter(function(x){ return !x.traspaso; });
+  var pagado = reales.reduce(function(a, x){ return a + (x.monto || 0); }, 0);
+  var movs = pagado > 0.01 ? movimientosCajaDeBoleta(p) : [];
+  var msg = '¿Eliminar la boleta #' + p.numero + ' de ' + (p.cliente ? p.cliente.nombre : 'Consumidor final') + ' por $' + fmt(p.total) + '?' + NL + NL + 'Va a volver todo a su lugar:';
+  msg += NL + '• El stock de los productos de la boleta se devuelve' + (p.stock_aplicado ? '.' : ' (esta boleta no había descontado stock).');
+  msg += NL + (viejas.length ? '• La deuda anterior vuelve a Deudores en las boletas ' + viejas.map(function(x){ return '#' + x.numero; }).join(', ') + '.' : '• No traía deuda anterior unida.');
+  if(pagado > 0.01) msg += NL + NL + 'OJO: la boleta tiene pagos cargados por $' + fmt(pagado) + (movs.length ? ' (' + movs.length + ' movimiento' + (movs.length !== 1 ? 's' : '') + ' en Caja).' : '.');
+  if(!confirm(msg)) return;
+  var sacarCaja = false;
+  if(movs.length){
+    sacarCaja = confirm('¿Sacar también de la Caja el cobro de esta boleta (' + movs.map(function(m){ return '$' + fmt(m.monto) + ' ' + m.medio; }).join(', ') + ')?' + NL + NL + 'Aceptar = se saca de Caja. Cancelar = queda en Caja (por ejemplo si hay que devolver la plata).');
+  }
+  registrarActividad('eliminacion',`Eliminó boleta #${p.numero}`,`Cliente: ${p.cliente?.nombre||'Consumidor final'} | Total: $${fmt(p.total)}` + (viejas.length ? ' | Deuda vuelta a ' + viejas.map(function(x){ return '#' + x.numero; }).join(', ') : '') + (sacarCaja ? ' | Cobro sacado de Caja' : ''));
+  deshacerTraspasos(p);
   if(p.stock_aplicado) devolverStockBoleta(p);
-  db.presupuestos.splice(idx,1);
-  guardar();renderPresupuestos();renderDashboard(); if(typeof renderProductos === 'function') renderProductos();
+  if(sacarCaja) db.caja = db.caja.filter(function(m){ return movs.indexOf(m) < 0; });
+  db.presupuestos.splice(db.presupuestos.indexOf(p),1);
+  guardar();renderPresupuestos();renderDashboard(); try{ renderDeudores(); renderAfavor(); renderEntrega(); renderCaja(); }catch(e){} if(typeof renderProductos === 'function') renderProductos();
 }
 function limpiarFechasPres(){
   document.getElementById('pres-desde').value='';

@@ -4038,6 +4038,21 @@ function detalleBoletasDatos(r, provFiltro){
   boletas.sort(function(a, b){ return normNombre(a.p.cliente.nombre).localeCompare(normNombre(b.p.cliente.nombre), 'es') || a.f.localeCompare(b.f) || (a.p.numero - b.p.numero); });
   return boletas;
 }
+// Boletas del grupo que no entran al detalle porque estan canceladas, rechazadas o vencidas (para saber por que "no aparece" una boleta)
+function boletasExcluidasDetalle(r){
+  var cod0 = ({Gloria:'G',Luis:'L',Edgardo:'E'})[r.lista] || 'G';
+  var nombres = {}; r.filas.forEach(function(x){ nombres[normNombre(x.nombre)] = 1; });
+  var out = [];
+  db.presupuestos.forEach(function(p){
+    if(!p.cliente || (p.estado !== 'Rechazado' && p.estado !== 'Vencido')) return;
+    if(!nombres[normNombre(p.cliente.nombre)] && String(p.cliente.codigo || '').toUpperCase() !== cod0) return;
+    var f = fechaParaResumen(p);
+    if(!f || (r.desde && f < r.desde) || (r.hasta && f > r.hasta)) return;
+    out.push({ p: p, f: f, motivo: p.cancelada ? 'Pedido cancelado' : (p.estado === 'Vencido' ? 'Vencida' : 'Rechazada') });
+  });
+  out.sort(function(a, b){ return normNombre(a.p.cliente.nombre).localeCompare(normNombre(b.p.cliente.nombre), 'es') || a.f.localeCompare(b.f); });
+  return out;
+}
 function xlsxDetalle(r, provFiltro){
   var boletas = detalleBoletasDatos(r, provFiltro);
   var L = ['A','B','C','D','E','F','G','H','I','J','K'], rows = [], merges = [];
@@ -4072,6 +4087,15 @@ function xlsxDetalle(r, provFiltro){
     fila(f, [t(0, f, '', 6), t(1, f, 'Total boleta ' + b.p.numero, 6), t(2, f, '', 6), t(3, f, '', 6), t(4, f, '', 6), t(5, f, '', 6), n(6, f, tot, 7), n(7, f, pagado, 7), t(8, f, fechasPago.join(' - '), 6), t(9, f, est, sT), n(10, f, Math.abs(sal), sN)]);
     f++;
   });
+  var excl = boletasExcluidasDetalle(r);
+  if(excl.length){
+    f++;
+    fila(f, [t(0, f, 'Boletas canceladas, rechazadas o vencidas en el período (NO cuentan en ningún total)', 3)]); merges.push('A' + f + ':K' + f); f++;
+    excl.forEach(function(x){
+      fila(f, [t(0, f, fmtFechaAR(x.f), 3), t(1, f, x.p.cliente.nombre, 3), n(2, f, x.p.numero, 4)].concat(vacias(3, 5, f, 3), [n(6, f, x.p.total || 0, 5)], vacias(7, 8, f, 3), [t(9, f, x.motivo, 3), t(10, f, '', 3)]));
+      f++;
+    });
+  }
   if(!boletas.length){ fila(f, [t(0, f, 'No hay boletas en este período' + (provFiltro ? ' con productos de ' + provFiltro : ''), 8)]); f++; }
   else { f++; fila(f, [t(0, f, 'TOTAL', 6), t(1, f, boletas.length + ' boletas', 6), t(2, f, '', 6), t(3, f, '', 6), t(4, f, '', 6), t(5, f, '', 6), n(6, f, totalGral, 7)].concat(vacias(7, 9, f, 6), [t(10, f, '', 6)]), 20); f++; }
   var sinCompra = r.filas.filter(function(x){ return x.incluir && x.boletas === 0 && x.neto > 0.01; });

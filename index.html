@@ -716,7 +716,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
     <div id="caja" class="section">
       <div class="section-header">
         <h2>Caja 💰</h2>
-        <button class="btn btn-primary" onclick="abrirModalMovimiento()">+ Registrar movimiento</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="abrirPase()">🔁 Pasar entre efectivo y transferencia</button><button class="btn btn-primary" onclick="abrirModalMovimiento()">+ Registrar movimiento</button></div>
       </div>
       <!-- Resumen -->
       <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
@@ -1145,6 +1145,21 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
   </div>
 </div>
 <!-- MODAL COBRO TOTAL -->
+<div class="modal-backdrop" id="modal-pase">
+  <div class="modal" style="max-width:420px">
+    <h3>🔁 Pasar plata entre efectivo y transferencia</h3>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Mueve plata de un medio a otro. NO cuenta como ingreso ni como gasto: el total de la caja no cambia.</div>
+    <div class="form-group" style="margin-bottom:12px"><label>Sentido</label>
+      <select id="pase-sentido"><option value="ET">Efectivo → Transferencia (deposité / pasé a la cuenta)</option><option value="TE">Transferencia → Efectivo (retiré)</option></select></div>
+    <div class="form-group" style="margin-bottom:12px"><label>Monto</label><input type="number" id="pase-monto" min="0" step="0.01" placeholder="0"></div>
+    <div class="form-group" style="margin-bottom:12px"><label>Fecha</label><input type="date" id="pase-fecha"></div>
+    <div class="form-group" style="margin-bottom:12px"><label>Nota (opcional)</label><input type="text" id="pase-nota" placeholder="Ej: depósito en el banco"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="cerrarModales()">Cancelar</button>
+      <button class="btn btn-green" onclick="guardarPase()">✅ Guardar</button>
+    </div>
+  </div>
+</div>
 <div class="modal-backdrop" id="modal-medio">
   <div class="modal" style="max-width:420px">
     <h3>Cambiar medio de pago</h3>
@@ -5191,6 +5206,31 @@ async function guardarMovimiento(){
   const okMov = await guardar();
   if(!okMov) alert('El movimiento se cargó SOLO en esta computadora: no se pudo guardar en el servidor. No refresques la página; se reintenta solo cada 30 segundos.');
 }
+function abrirPase(){
+  document.getElementById('pase-monto').value='';
+  document.getElementById('pase-nota').value='';
+  document.getElementById('pase-sentido').value='ET';
+  document.getElementById('pase-fecha').value=new Date().toISOString().split('T')[0];
+  document.getElementById('modal-pase').classList.add('open');
+}
+async function guardarPase(){
+  const monto=parseFloat(document.getElementById('pase-monto').value)||0;
+  if(!monto||monto<=0){alert('Ingresá un monto');return;}
+  const et=document.getElementById('pase-sentido').value==='ET';
+  const de=et?'Efectivo':'Transferencia', a=et?'Transferencia':'Efectivo';
+  const nota=document.getElementById('pase-nota').value.trim();
+  const fechaVal=document.getElementById('pase-fecha').value;
+  const fecha=fechaVal?new Date(fechaVal+'T12:00:00').toLocaleDateString('es-AR'):new Date().toLocaleDateString('es-AR');
+  const desc='Pase de '+de+' a '+a+(nota?' - '+nota:'');
+  if(!db.caja)db.caja=[];
+  const pid='p'+Date.now()+Math.random().toString(36).slice(2,6);
+  db.caja.push({fecha,tipo:'salida',medio:de,desc,monto,pase:true,pase_id:pid,id:nuevoIdCaja()});
+  db.caja.push({fecha,tipo:'entrada',medio:a,desc,monto,pase:true,pase_id:pid,id:nuevoIdCaja()});
+  registrarActividad('caja','Pasó plata entre medios','$'+fmt(monto)+': '+de+' → '+a);
+  cerrarModales(); renderCaja();
+  const ok=await guardar();
+  if(!ok) alert('El pase se cargó SOLO en esta computadora: no se pudo guardar en el servidor. No refresques la página; se reintenta solo.');
+}
 function parseFechaAR(s){
   if(!s)return null;
   const p=s.split('/'); if(p.length!==3)return null;
@@ -5235,7 +5275,7 @@ function renderCaja(){
   if(pcard){
     if(filtroCaja==='rango'){
       let pe=0,ps=0;
-      movs.forEach(({m})=>{ if(m.tipo==='entrada') pe+=m.monto; else ps+=m.monto; });
+      movs.forEach(({m})=>{ if(m.pase) return; if(m.tipo==='entrada') pe+=m.monto; else ps+=m.monto; });
       pcard.style.display='block';
       pcard.firstElementChild.innerHTML='<strong>'+movs.length+' movimiento'+(movs.length!==1?'s':'')+' en esas fechas</strong>'+
         '<span>Entradas: <strong style="color:var(--green)">$'+fmt(pe)+'</strong></span>'+
@@ -5246,12 +5286,12 @@ function renderCaja(){
   if(!movs.length){t.innerHTML='<tr class="empty-row"><td colspan="7">Sin movimientos en este período</td></tr>';return;}
   t.innerHTML=movs.map(({m,i})=>`<tr>
     <td style="font-size:12px">${m.fecha}</td>
-    <td><span class="badge ${m.tipo==='entrada'?'badge-ok':'badge-out'}">${m.tipo==='entrada'?'Entrada':'Salida'}</span></td>
+    <td><span class="badge ${m.pase?'badge-low':(m.tipo==='entrada'?'badge-ok':'badge-out')}">${m.pase?'Pase':(m.tipo==='entrada'?'Entrada':'Salida')}</span></td>
     <td>${m.desc}</td>
     <td style="font-size:12px;color:var(--text2)">${m.medio}</td>
     <td style="color:var(--green);font-weight:600">${m.tipo==='entrada'?'$'+fmt(m.monto):'—'}</td>
     <td style="color:var(--red);font-weight:600">${m.tipo==='salida'?'$'+fmt(m.monto):'—'}</td>
-    <td style="white-space:nowrap"><button class="btn btn-sm btn-editmedio" onclick="abrirCambioMedio(${i})" title="Cambiar el medio de pago (efectivo / transferencia)">✏️</button> <button class="btn btn-sm btn-danger" onclick="eliminarMovimiento(${i})">🗑️</button></td>
+    <td style="white-space:nowrap">${m.pase?'':'<button class="btn btn-sm btn-editmedio" onclick="abrirCambioMedio('+i+')" title="Cambiar el medio de pago (efectivo / transferencia)">✏️</button>'} <button class="btn btn-sm btn-danger" onclick="eliminarMovimiento(${i})">🗑️</button></td>
   </tr>`).join('');
   if(rolActual!=='admin') t.querySelectorAll('.btn-danger,.btn-editmedio').forEach(function(b){ b.remove(); });
 }
@@ -6278,6 +6318,12 @@ function confirmarCambioMedio(){
 }
 function eliminarMovimiento(idx){
   if(rolActual!=='admin'){ alert('No tenés permiso para eliminar movimientos de caja.'); return; }
+  var mv=db.caja[idx];
+  if(mv&&mv.pase){
+    if(!confirm('¿Eliminar este pase entre medios? Se borran las dos partes (la salida y la entrada).'))return;
+    db.caja=db.caja.filter(function(c){ return c!==mv && !(mv.pase_id && c.pase_id===mv.pase_id); }); renderCaja(); guardar().then(function(ok){ if(!ok) alert('No se pudo guardar en el servidor. No refresques la página; se reintenta solo.'); });
+    return;
+  }
   if(!confirm('¿Eliminar este movimiento de la caja?'))return;
   db.caja.splice(idx,1); renderCaja(); guardar().then(function(ok){ if(!ok) alert('No se pudo guardar en el servidor. No refresques la página; se reintenta solo.'); });
 }
@@ -6658,6 +6704,7 @@ function renderContabilidad(){
   // ---- caja del período
   var entradas = 0, salidas = 0, porMedio = {}, gastos = [];
   (db.caja || []).forEach(function(m){
+    if(m.pase) return;
     var dt = parseFechaAR(m.fecha); if(!dt || !enRango(fechaISO(dt))) return;
     var med = m.medio || 'Otro'; var fm = porMedio[med] || (porMedio[med] = { ent: 0, sal: 0 });
     if(m.tipo === 'entrada'){ entradas += m.monto; fm.ent += m.monto; } else { salidas += m.monto; fm.sal += m.monto; gastos.push(m); }
@@ -6704,6 +6751,7 @@ function renderContabilidad(){
     var b = ctbBoleta(p); m.v += b.v; m.g += b.v - b.c;
   });
   (db.caja || []).forEach(function(c){
+    if(c.pase) return;
     var dt = parseFechaAR(c.fecha); if(!dt) return;
     var m = mapaM[fechaISO(dt).slice(0, 7)]; if(!m) return;
     if(c.tipo === 'entrada') m.ent += c.monto; else m.sal += c.monto;

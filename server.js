@@ -6954,6 +6954,7 @@ function renderActividad(){
 // Auto-sync cada 30 segundos - solo baja del servidor, no pisa si se está guardando
 setInterval(async () => {
   if(!rolActual) return; // solo si está logueado
+  if(document.hidden) return; // pestaña en segundo plano: no gastar datos del servidor
   if(guardandoEnServidor) return; // no interferir si se está guardando
   if(planillaSucia || listasSucia || pgSucia || csSucio || cgSucio) return; // no pisar una planilla de costos con cambios sin guardar
   if(snapSync !== null && armarDelta().hay){
@@ -6981,7 +6982,7 @@ setInterval(async () => {
     };
     if(secActiva && renders[secActiva]) renders[secActiva]();
   } catch(e){ console.warn('Error en auto-sync:', e); }
-}, 30 * 1000);
+}, 90 * 1000);
 
 // Arrancar: cargar local (rápido) luego servidor, después mostrar login
 cargar();
@@ -7240,7 +7241,7 @@ app.post('/api/auth/empleado', requerirAuth, async (req, res) => {
 // ---- Lectura: cada usuario ve solo lo que le corresponde, sin contraseñas ----
 app.get('/api/db/all', requerirAuth, async (req, res) => {
   try {
-    const { data, error } = await supabase.from('hap_data').select('tabla, valor');
+    const { data, error } = await supabase.from('hap_data').select('tabla, valor').not('tabla', 'like', 'backup_%').not('tabla', 'in', '(auth,historial)');
     if (error) { console.error('GET error:', error.message); return res.status(500).json({ error: 'Error de lectura' }); }
     const result = {};
     (data || []).forEach(row => { if(!TABLAS_OCULTAS(row.tabla)) result[row.tabla] = row.valor; });
@@ -7347,7 +7348,7 @@ async function respaldoDiario(){
   if(ultimoRespaldo === dia) return;
   ultimoRespaldo = dia;
   if(await leerTabla('backup_' + dia)) return;
-  const { data, error } = await supabase.from('hap_data').select('tabla, valor');
+  const { data, error } = await supabase.from('hap_data').select('tabla, valor').not('tabla', 'like', 'backup_%').not('tabla', 'in', '(auth,historial)');
   if(error) throw new Error(error.message);
   const tablas = {};
   (data || []).forEach(r => { if(!TABLAS_OCULTAS(r.tabla)) tablas[r.tabla] = r.valor; });

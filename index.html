@@ -6977,6 +6977,7 @@ function renderActividad(){
 // Auto-sync cada 30 segundos - solo baja del servidor, no pisa si se está guardando
 setInterval(async () => {
   if(!rolActual) return; // solo si está logueado
+  if(document.hidden) return; // pestaña en segundo plano: no gastar datos del servidor
   if(guardandoEnServidor) return; // no interferir si se está guardando
   if(planillaSucia || listasSucia || pgSucia || csSucio || cgSucio) return; // no pisar una planilla de costos con cambios sin guardar
   if(snapSync !== null && armarDelta().hay){
@@ -7004,7 +7005,7 @@ setInterval(async () => {
     };
     if(secActiva && renders[secActiva]) renders[secActiva]();
   } catch(e){ console.warn('Error en auto-sync:', e); }
-}, 30 * 1000);
+}, 90 * 1000);
 
 // Arrancar: cargar local (rápido) luego servidor, después mostrar login
 cargar();

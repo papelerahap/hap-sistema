@@ -2133,7 +2133,7 @@ async function cargarDesdeServidor() {
     if(snapSync !== null && armarDelta().hay) return;
     if(data && data.productos && data.productos.length > 0) {
       // El servidor tiene datos reales — usarlos completos
-      db = data;
+      db = data; pullAplicado = true;
       // Asegurar campos mínimos
       if(!db.presupuestos) db.presupuestos = [];
       if(!db.caja)         db.caja         = [];
@@ -7001,6 +7001,7 @@ function renderActividad(){
 
 // Arrancar en pantalla de login
 // Auto-sync cada 30 segundos - solo baja del servidor, no pisa si se está guardando
+var versionVista = null, versionCand = null, versionTick = 0, pullAplicado = false;
 setInterval(async () => {
   if(!rolActual) return; // solo si está logueado
   if(document.hidden) return; // pestaña en segundo plano: no gastar datos del servidor
@@ -7014,7 +7015,20 @@ setInterval(async () => {
       return;
     }
   }
+  // consulta liviana: solo baja todo si alguien guardo algo desde la ultima vez
+  versionTick++;
+  versionCand = null;
+  try{
+    var rv = await apiFetch(API + '/api/db/version');
+    if(rv.ok){
+      var jv = await rv.json();
+      if(jv.v === versionVista) return;
+      versionCand = jv.v;
+    } else if(versionTick % 9 !== 0) return;
+  }catch(e){ if(versionTick % 9 !== 0) return; }
+  pullAplicado = false;
   await cargarDesdeServidor();
+  if(pullAplicado && versionCand) versionVista = versionCand;
   try {
     const secActiva = document.querySelector('.section.active')?.id;
     const renders = {
@@ -7031,7 +7045,7 @@ setInterval(async () => {
     };
     if(secActiva && renders[secActiva]) renders[secActiva]();
   } catch(e){ console.warn('Error en auto-sync:', e); }
-}, 90 * 1000);
+}, 10 * 1000);
 
 // Arrancar: cargar local (rápido) luego servidor, después mostrar login
 cargar();
@@ -7084,9 +7098,13 @@ async function leerTabla(t){
   if(error) throw new Error(error.message);
   return data ? data.valor : null;
 }
+// Version de los datos: cambia cada vez que se guarda algo; las computadoras la consultan (muy liviano) y solo bajan todo si cambio
+const ARRANQUE_ID = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+let contVersion = 0;
 async function escribirTabla(t, v){
   const { error } = await supabase.from('hap_data').upsert({ tabla: t, valor: v }, { onConflict: 'tabla' });
   if(error) throw new Error(error.message);
+  if(!TABLAS_OCULTAS(t)) contVersion++;
 }
 function normNombreSrv(n){ return String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim(); }
 function stampIdsLegacy(arr, prefijo, sigFn){
@@ -7288,6 +7306,7 @@ app.post('/api/auth/empleado', requerirAuth, async (req, res) => {
 });
 
 // ---- Lectura: cada usuario ve solo lo que le corresponde, sin contraseñas ----
+app.get('/api/db/version', requerirAuth, (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ v: ARRANQUE_ID + ':' + contVersion }); });
 app.get('/api/db/all', requerirAuth, async (req, res) => {
   try {
     const { data, error } = await supabase.from('hap_data').select('tabla, valor').not('tabla', 'like', 'backup_%').not('tabla', 'in', '(auth,historial)');

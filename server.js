@@ -3530,8 +3530,9 @@ function calcSaldoAFavorCliente(cliIdx){
     .reduce((sum,p)=>sum+Math.max(0,-saldoPendienteBoleta(p)),0);
 }
 function saldoPendienteBoleta(p){
-  const pagado=(p.pagos||[]).reduce((s,pg)=>s+pg.monto,0);
-  return p.total - pagado; // puede ser negativo = a favor
+  const pagado=(p.pagos||[]).reduce((s,pg)=>s+Math.round(pg.monto*100)/100,0);
+  const r=Math.round((Math.round(p.total*100)/100 - pagado)*100)/100; // en centavos: evita saldos de -0,01 por redondeo
+  return r===0?0:r; // puede ser negativo = a favor
 }
 function saldoDeuda(p){ return Math.max(0, saldoPendienteBoleta(p)); }
 function saldoAFavor(p){ return Math.max(0, -saldoPendienteBoleta(p)); }

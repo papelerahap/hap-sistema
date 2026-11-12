@@ -7027,7 +7027,6 @@ function renderActividad(){
 var versionVista = null, versionCand = null, versionTick = 0, pullAplicado = false, bootId = null;
 setInterval(async () => {
   if(!rolActual) return; // solo si está logueado
-  if(document.hidden) return; // pestaña en segundo plano: no gastar datos del servidor
   if(guardandoEnServidor) return; // no interferir si se está guardando
   if(planillaSucia || listasSucia || pgSucia || csSucio || cgSucio) return; // no pisar una planilla de costos con cambios sin guardar
   if(snapSync !== null && armarDelta().hay){

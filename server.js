@@ -7001,7 +7001,7 @@ function renderActividad(){
 
 // Arrancar en pantalla de login
 // Auto-sync cada 30 segundos - solo baja del servidor, no pisa si se está guardando
-var versionVista = null, versionCand = null, versionTick = 0, pullAplicado = false;
+var versionVista = null, versionCand = null, versionTick = 0, pullAplicado = false, bootId = null;
 setInterval(async () => {
   if(!rolActual) return; // solo si está logueado
   if(document.hidden) return; // pestaña en segundo plano: no gastar datos del servidor
@@ -7022,6 +7022,11 @@ setInterval(async () => {
     var rv = await apiFetch(API + '/api/db/version');
     if(rv.ok){
       var jv = await rv.json();
+      // si el servidor se reinicio (se subio una version nueva), la pagina se recarga sola cuando no hay nada sin guardar
+      if(jv.b){
+        if(bootId && jv.b !== bootId && !document.querySelector('.modal-backdrop.open')){ location.reload(); return; }
+        bootId = jv.b;
+      }
       if(jv.v === versionVista) return;
       versionCand = jv.v;
     } else if(versionTick % 9 !== 0) return;
@@ -7306,7 +7311,7 @@ app.post('/api/auth/empleado', requerirAuth, async (req, res) => {
 });
 
 // ---- Lectura: cada usuario ve solo lo que le corresponde, sin contraseñas ----
-app.get('/api/db/version', requerirAuth, (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ v: ARRANQUE_ID + ':' + contVersion }); });
+app.get('/api/db/version', requerirAuth, (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ v: ARRANQUE_ID + ':' + contVersion, b: ARRANQUE_ID }); });
 app.get('/api/db/all', requerirAuth, async (req, res) => {
   try {
     const { data, error } = await supabase.from('hap_data').select('tabla, valor').not('tabla', 'like', 'backup_%').not('tabla', 'in', '(auth,historial)');

@@ -975,6 +975,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
         <button class="filtro-btn" onclick="setFiltroActividad('presupuesto',this)">🧾 Presupuestos</button>
         <button class="filtro-btn" onclick="setFiltroActividad('pago',this)">💲 Pagos</button>
         <button class="filtro-btn" onclick="setFiltroActividad('eliminacion',this)">🗑️ Eliminaciones</button>
+        <input type="search" id="act-buscar" placeholder="🔍 Buscar N° de boleta, cliente..." oninput="renderActividad()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;min-width:240px">
       </div>
       <div class="card">
         <table>
@@ -7002,12 +7003,11 @@ function setFiltroActividad(tipo, el){
 }
 function renderActividad(){
   if(!db.actividad) db.actividad=[];
-  const lista = filtroActividad
-    ? db.actividad.filter(a=>a.tipo===filtroActividad)
-    : db.actividad;
+  var qa = ((document.getElementById('act-buscar')||{}).value||'').trim().toLowerCase().replace(/^#/, '');
+  const lista = db.actividad.filter(a=>(!filtroActividad || a.tipo===filtroActividad) && (!qa || (String(a.accion||'')+' '+String(a.detalle||'')+' '+String(a.usuario||'')).toLowerCase().indexOf(qa) > -1));
   const t = document.getElementById('tabla-actividad');
   if(!lista.length){
-    t.innerHTML='<tr class="empty-row"><td colspan="4">Sin actividad registrada</td></tr>';
+    t.innerHTML='<tr class="empty-row"><td colspan="4">'+(qa?'Sin resultados para "'+qa.replace(/[<>&"]/g,'')+'"':'Sin actividad registrada')+'</td></tr>';
     return;
   }
   const iconos = { presupuesto:'🧾', pago:'💲', eliminacion:'🗑️' };

@@ -740,7 +740,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
     <div id="caja" class="section">
       <div class="section-header">
         <h2>Caja 💰</h2>
-        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="abrirPase()">🔁 Pasar entre efectivo y transferencia</button><button class="btn btn-primary" onclick="abrirModalMovimiento()">+ Registrar movimiento</button></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-green" id="btn-cerrar-caja" onclick="abrirCierreCaja()">🔒 Cerrar caja</button><button class="btn" onclick="abrirPase()">🔁 Pasar entre efectivo y transferencia</button><button class="btn btn-primary" onclick="abrirModalMovimiento()">+ Registrar movimiento</button></div>
       </div>
       <!-- Resumen -->
       <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
@@ -760,6 +760,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
           <div class="ssub">efectivo + transferencia</div>
         </div>
       </div>
+      <div id="caja-cierre-info" style="display:none;margin-bottom:10px;padding:10px 14px;border-radius:var(--radius);background:var(--green-light);color:var(--green);font-size:13px;align-items:center;gap:10px;flex-wrap:wrap"></div>
       <!-- Filtro fecha -->
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
         <button class="filtro-btn fc-per active" onclick="setFiltroCaja('hoy',this)">Hoy</button>
@@ -1170,6 +1171,24 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
   </div>
 </div>
 <!-- MODAL COBRO TOTAL -->
+<div class="modal-backdrop" id="modal-cierrecaja">
+  <div class="modal" style="max-width:460px">
+    <h3>🔒 Cerrar caja</h3>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Contá lo que hay y dá el OK de cada medio. Si los dos coinciden con el sistema, la caja se cierra y esos días ya no se pueden modificar.</div>
+    <div class="form-group" style="margin-bottom:14px"><label>Cerrar hasta el día</label><input type="date" id="cc-fecha" onchange="ccCambio()"></div>
+    <div style="border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:13px"><strong>💵 Efectivo</strong><span>Sistema: <strong id="cc-sis-ef">$0</strong></span></div>
+      <div style="display:flex;gap:8px;margin-top:8px"><input type="text" inputmode="decimal" id="cc-ef" placeholder="¿Cuánto hay en efectivo?" oninput="ccEditado('ef')" style="flex:1"><button class="btn btn-green" id="cc-btn-ef" onclick="ccConfirmar('ef')">OK</button></div>
+      <div id="cc-msg-ef" style="font-size:12px;margin-top:6px"></div>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;font-size:13px"><strong>🏦 Transferencia</strong><span>Sistema: <strong id="cc-sis-tr">$0</strong></span></div>
+      <div style="display:flex;gap:8px;margin-top:8px"><input type="text" inputmode="decimal" id="cc-tr" placeholder="¿Cuánto hay en el banco / cuenta?" oninput="ccEditado('tr')" style="flex:1"><button class="btn btn-green" id="cc-btn-tr" onclick="ccConfirmar('tr')">OK</button></div>
+      <div id="cc-msg-tr" style="font-size:12px;margin-top:6px"></div>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="cerrarModales()">Cancelar</button></div>
+  </div>
+</div>
 <div class="modal-backdrop" id="modal-pase">
   <div class="modal" style="max-width:420px">
     <h3>🔁 Pasar plata entre efectivo y transferencia</h3>
@@ -2144,6 +2163,7 @@ async function cargarDesdeServidor() {
       if(!db.listas_margen) db.listas_margen = {};
       if(!db.controles_stock) db.controles_stock = [];
       if(!db.cierres) db.cierres = [];
+      if(!db.cierres_caja) db.cierres_caja = [];
       if(!db.prov_movs) db.prov_movs = [];
       if(!db.recordatorios) db.recordatorios = [];
       ordenarDatos();
@@ -3767,7 +3787,9 @@ function eliminarPresupuesto(idx){
   if(pagado > 0.01) msg += NL + NL + 'OJO: la boleta tiene pagos cargados por $' + fmt(pagado) + (movs.length ? ' (' + movs.length + ' movimiento' + (movs.length !== 1 ? 's' : '') + ' en Caja).' : '.');
   if(!confirm(msg)) return;
   var sacarCaja = false;
-  if(movs.length){
+  if(movs.length && movs.some(movCajaCerrado)){
+    alert('El cobro de Caja de esta boleta es de un día ya cerrado: la boleta se elimina, pero el cobro queda en Caja.');
+  } else if(movs.length){
     sacarCaja = confirm('¿Sacar también de la Caja el cobro de esta boleta (' + movs.map(function(m){ return '$' + fmt(m.monto) + ' ' + m.medio; }).join(', ') + ')?' + NL + NL + 'Aceptar = se saca de Caja. Cancelar = queda en Caja (por ejemplo si hay que devolver la plata).');
   }
   registrarActividad('eliminacion',\`Eliminó boleta #\${p.numero}\`,\`Cliente: \${p.cliente?.nombre||'Consumidor final'} | Total: $\${fmt(p.total)}\` + (viejas.length ? ' | Deuda vuelta a ' + viejas.map(function(x){ return '#' + x.numero; }).join(', ') : '') + (sacarCaja ? ' | Cobro sacado de Caja' : ''));
@@ -4797,6 +4819,7 @@ function confirmarPago(){
   const monto=parseFloat(document.getElementById('pago-monto').value)||0;
   if(pagoEntrega&&!monto){ pagoEntrega=false; cerrarModales(); marcarEntregado(pagoIdx); return; }
   if(!monto||monto<=0){alert('Ingresá un monto mayor a cero');return;}
+  if(cajaHoyCerrada()){ avisoHoyCerrada(); return; }
   if(pagoIdx===null||pagoIdx===undefined) return;
   const p=db.presupuestos[pagoIdx];
   if(!p) return;
@@ -4825,6 +4848,7 @@ function eliminarPago(idx,j){
   if(rolActual!=='admin') return;
   var p=db.presupuestos[idx]; if(!p||!p.pagos||!p.pagos[j]) return;
   var pg=p.pagos[j];
+  if(!pg.traspaso && (db.caja||[]).some(function(c){ return c.tipo==='entrada' && Math.abs((c.monto||0)-pg.monto)<0.01 && c.medio===pg.forma && String(c.desc||'').indexOf('boleta #'+p.numero)>-1 && movCajaCerrado(c); })){ avisoCajaCerrada(); return; }
   if(!confirm('¿Borrar el pago de $'+fmt(pg.monto)+' ('+pg.forma+', '+pg.fecha+') de la boleta #'+p.numero+'? También se saca de la Caja.')) return;
   p.pagos.splice(j,1);
   if(!pg.traspaso && db.caja){
@@ -5034,6 +5058,7 @@ function cobroFormaCambio(){
   document.getElementById('cobro-mixto').style.display=(document.getElementById('cobro-forma').value==='Efectivo + Transferencia')?'block':'none';
 }
 function confirmarCobroTotal(){
+  if(cajaHoyCerrada()){ avisoHoyCerrada(); return; }
   if(cobroGrupo){ confirmarCobroGrupo(); return; }
   var idx=cobroIdx; if(idx===null||idx===undefined) return;
   var p=db.presupuestos[idx]; if(!p) return;
@@ -5175,6 +5200,7 @@ async function guardarMovimiento(){
   if(!desc){alert('Ingresá una descripción');return;}
   if(!db.caja)db.caja=[];
   const fechaVal=document.getElementById('mov-fecha').value;
+  if(fechaVal ? fechaVal<=cajaCerradaHasta() : cajaHoyCerrada()){ avisoCajaCerrada(); return; }
   db.caja.push({
     fecha: fechaVal ? new Date(fechaVal+'T12:00:00').toLocaleDateString('es-AR') : new Date().toLocaleDateString('es-AR'),
     tipo: document.getElementById('mov-tipo').value,
@@ -5184,6 +5210,83 @@ async function guardarMovimiento(){
   cerrarModales(); renderCaja();
   const okMov = await guardar();
   if(!okMov) alert('El movimiento se cargó SOLO en esta computadora: no se pudo guardar en el servidor. No refresques la página; se reintenta solo cada 30 segundos.');
+}
+// ---- CIERRE DE CAJA: se da el OK de efectivo y de transferencia; si coinciden con el sistema, el dia queda cerrado y no se modifica ----
+function cajaCerradaHasta(){ var m = ''; (db.cierres_caja || []).forEach(function(c){ if(c && c.fecha > m) m = c.fecha; }); return m; }
+function fechaArCerrada(f){ var h = cajaCerradaHasta(); if(!h) return false; var d = parseFechaAR(f); if(!d) return false; return fechaISO(d) <= h; }
+function movCajaCerrado(m){ return !!m && fechaArCerrada(m.fecha); }
+function cajaHoyCerrada(){ var h = cajaCerradaHasta(); return !!h && fechaISO(new Date()) <= h; }
+function fmtFechaISO(iso){ var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : ''; }
+function avisoCajaCerrada(){ alert('Ese movimiento es de un día que ya está cerrado en Caja (hasta el ' + fmtFechaISO(cajaCerradaHasta()) + '). No se puede modificar.' + (esAdminReal() ? String.fromCharCode(10) + String.fromCharCode(10) + 'Si hace falta, reabrí el cierre desde Caja.' : '')); }
+function avisoHoyCerrada(){ alert('La caja de hoy ya está cerrada (hasta el ' + fmtFechaISO(cajaCerradaHasta()) + '), así que no se puede registrar un cobro con fecha de hoy.' + (esAdminReal() ? String.fromCharCode(10) + String.fromCharCode(10) + 'Reabrí el cierre desde Caja para cargarlo.' : '')); }
+function saldosCajaHasta(iso){
+  var ef = 0, tr = 0;
+  (db.caja || []).forEach(function(m){
+    var d = parseFechaAR(m.fecha); if(!d || fechaISO(d) > iso) return;
+    var s = (m.tipo === 'entrada' ? 1 : -1) * (m.monto || 0);
+    if(m.medio === 'Efectivo') ef += s; else tr += s;
+  });
+  return { ef: Math.round(ef * 100) / 100, tr: Math.round(tr * 100) / 100 };
+}
+var ccOk = { ef: false, tr: false };
+function abrirCierreCaja(){
+  if(rolActual !== 'admin') return;
+  document.getElementById('cc-fecha').value = fechaISO(new Date());
+  document.getElementById('cc-ef').value = ''; document.getElementById('cc-tr').value = '';
+  ccOk = { ef: false, tr: false };
+  ccRefrescar();
+  document.getElementById('modal-cierrecaja').classList.add('open');
+}
+function ccCambio(){ ccOk = { ef: false, tr: false }; ccRefrescar(); }
+function ccEditado(m){ ccOk[m] = false; var e = document.getElementById('cc-msg-' + m); if(e){ e.textContent = ''; } }
+function ccRefrescar(){
+  var f = document.getElementById('cc-fecha').value; if(!f) return;
+  var s = saldosCajaHasta(f);
+  document.getElementById('cc-sis-ef').textContent = '$' + fmt(s.ef);
+  document.getElementById('cc-sis-tr').textContent = '$' + fmt(s.tr);
+  ['ef', 'tr'].forEach(function(m){
+    var msg = document.getElementById('cc-msg-' + m);
+    if(ccOk[m]){ msg.textContent = '✅ OK: coincide con el sistema'; msg.style.color = 'var(--green)'; }
+    else if(!msg.textContent || msg.textContent.indexOf('✅') === 0){ msg.textContent = ''; }
+  });
+}
+function ccConfirmar(m){
+  var f = document.getElementById('cc-fecha').value;
+  if(!f){ alert('Elegí hasta qué día cerrar'); return; }
+  var hasta = cajaCerradaHasta();
+  if(f <= hasta){ alert('La caja ya está cerrada hasta el ' + fmtFechaISO(hasta) + '. Elegí un día posterior.'); return; }
+  var s = saldosCajaHasta(f);
+  var val = parseCosto(document.getElementById('cc-' + m).value);
+  var msg = document.getElementById('cc-msg-' + m);
+  if(val === null){ alert('Escribí cuánto hay'); return; }
+  var dif = Math.round((val - s[m]) * 100) / 100;
+  if(Math.abs(dif) > 0.009){
+    ccOk[m] = false;
+    msg.textContent = '❌ No coincide: el sistema tiene $' + fmt(s[m]) + ' y vos contaste $' + fmt(val) + ' (diferencia ' + (dif > 0 ? '+' : '-') + '$' + fmt(Math.abs(dif)) + '). Revisá los movimientos.';
+    msg.style.color = 'var(--red)';
+    return;
+  }
+  ccOk[m] = true;
+  ccRefrescar();
+  if(ccOk.ef && ccOk.tr) ccCerrar(f, s);
+}
+function ccCerrar(f, s){
+  if(!confirm('Efectivo y transferencia coinciden.' + String.fromCharCode(10) + String.fromCharCode(10) + '¿Cerrar la caja hasta el ' + fmtFechaISO(f) + '? Los movimientos de esos días ya no se van a poder modificar.')) return;
+  if(!db.cierres_caja) db.cierres_caja = [];
+  db.cierres_caja.push({ id: 'cc' + Date.now() + Math.random().toString(36).slice(2, 5), fecha: f, efectivo: s.ef, transferencia: s.tr, creado: new Date().toISOString() });
+  registrarActividad('caja', 'Cerró la caja hasta el ' + fmtFechaISO(f), 'Efectivo $' + fmt(s.ef) + ' | Transferencia $' + fmt(s.tr));
+  guardar().then(function(ok){ if(!ok) alert('El cierre quedó SOLO en esta computadora: no se pudo guardar en el servidor. No refresques la página; se reintenta solo.'); });
+  cerrarModales(); renderCaja();
+}
+function reabrirCierreCaja(){
+  if(!esAdminReal()) return;
+  var ult = null; (db.cierres_caja || []).forEach(function(c){ if(!ult || c.fecha > ult.fecha) ult = c; });
+  if(!ult) return;
+  if(!confirm('¿Reabrir el cierre del ' + fmtFechaISO(ult.fecha) + '? Esos días van a poder modificarse otra vez.')) return;
+  db.cierres_caja = db.cierres_caja.filter(function(c){ return c !== ult; });
+  registrarActividad('caja', 'Reabrió el cierre de caja del ' + fmtFechaISO(ult.fecha), 'Efectivo $' + fmt(ult.efectivo) + ' | Transferencia $' + fmt(ult.transferencia));
+  guardar().then(function(ok){ if(!ok) alert('No se pudo guardar en el servidor. No refresques la página; se reintenta solo.'); });
+  renderCaja();
 }
 function abrirPase(){
   document.getElementById('pase-monto').value='';
@@ -5199,6 +5302,7 @@ async function guardarPase(){
   const de=et?'Efectivo':'Transferencia', a=et?'Transferencia':'Efectivo';
   const nota=document.getElementById('pase-nota').value.trim();
   const fechaVal=document.getElementById('pase-fecha').value;
+  if(fechaVal ? fechaVal<=cajaCerradaHasta() : cajaHoyCerrada()){ avisoCajaCerrada(); return; }
   const fecha=fechaVal?new Date(fechaVal+'T12:00:00').toLocaleDateString('es-AR'):new Date().toLocaleDateString('es-AR');
   const desc='Pase de '+de+' a '+a+(nota?' - '+nota:'');
   if(!db.caja)db.caja=[];
@@ -5249,6 +5353,12 @@ function renderCaja(){
   document.getElementById('caja-efectivo').textContent='$'+fmt(efEnt-efSal);
   document.getElementById('caja-transf').textContent='$'+fmt(trEnt-trSal);
   document.getElementById('caja-total').textContent='$'+fmt((efEnt-efSal)+(trEnt-trSal));
+  var cinfo=document.getElementById('caja-cierre-info'), hastaC=cajaCerradaHasta();
+  if(cinfo){
+    if(hastaC){ cinfo.style.display='flex'; cinfo.innerHTML='🔒 <strong>Caja cerrada hasta el '+fmtFechaISO(hastaC)+'</strong> — los movimientos de esos días no se pueden modificar.'+(esAdminReal()?' <button class="btn btn-sm" onclick="reabrirCierreCaja()">↩️ Reabrir último cierre</button>':''); }
+    else cinfo.style.display='none';
+  }
+  var bcc=document.getElementById('btn-cerrar-caja'); if(bcc) bcc.style.display=(rolActual==='admin')?'':'none';
   const t=document.getElementById('tabla-caja');
   const pcard=document.getElementById('caja-periodo');
   if(pcard){
@@ -5270,7 +5380,7 @@ function renderCaja(){
     <td style="font-size:12px;color:var(--text2)">\${m.medio}</td>
     <td style="color:var(--green);font-weight:600">\${m.tipo==='entrada'?'$'+fmt(m.monto):'—'}</td>
     <td style="color:var(--red);font-weight:600">\${m.tipo==='salida'?'$'+fmt(m.monto):'—'}</td>
-    <td style="white-space:nowrap">\${m.pase?'':'<button class="btn btn-sm btn-editmedio" onclick="abrirCambioMedio('+i+')" title="Cambiar el medio de pago (efectivo / transferencia)">✏️</button>'} <button class="btn btn-sm btn-danger" onclick="eliminarMovimiento(\${i})">🗑️</button></td>
+    <td style="white-space:nowrap">\${movCajaCerrado(m)?'<span title="Día cerrado: no se puede modificar">🔒</span>':''}\${(m.pase||movCajaCerrado(m))?'':'<button class="btn btn-sm btn-editmedio" onclick="abrirCambioMedio('+i+')" title="Cambiar el medio de pago (efectivo / transferencia)">✏️</button>'} \${movCajaCerrado(m)?'':'<button class="btn btn-sm btn-danger" onclick="eliminarMovimiento('+i+')">🗑️</button>'}</td>
   </tr>\`).join('');
   if(rolActual!=='admin') t.querySelectorAll('.btn-danger,.btn-editmedio').forEach(function(b){ b.remove(); });
 }
@@ -6109,6 +6219,7 @@ function confirmarMovProv(){
   var monto = parseCosto(document.getElementById('pmov-monto').value);
   if(monto === null || monto <= 0){ alert('Ingresá un monto válido'); return; }
   var fecha = document.getElementById('pmov-fecha').value || fechaISO(new Date());
+  if(tipo === 'pago' && fecha <= cajaCerradaHasta()){ avisoCajaCerrada(); return; }
   var desc = document.getElementById('pmov-desc').value.trim();
   if(!db.prov_movs) db.prov_movs = [];
   var mov = { id: 'pv' + Date.now() + Math.random().toString(36).slice(2, 6), proveedor: cuentaProv, fecha: fecha, tipo: tipo === 'pago' ? 'pago' : 'pedido', monto: monto, desc: desc || (tipo === 'pago' ? 'Pago' : 'Deuda cargada'), creado: new Date().toISOString() };
@@ -6131,6 +6242,7 @@ function confirmarMovProv(){
 function eliminarMovProv(id){
   if(rolActual !== 'admin') return;
   var m = (db.prov_movs || []).find(function(x){ return x.id === id; }); if(!m) return;
+  if(m.caja_id){ var cmv = (db.caja || []).find(function(c){ return c.id === m.caja_id; }); if(cmv && movCajaCerrado(cmv)){ avisoCajaCerrada(); return; } }
   var msg = '¿Eliminar este ' + (m.tipo === 'pago' ? 'pago' : 'pedido') + ' de $' + fmt(m.monto) + ' de la cuenta de ' + m.proveedor + '?';
   if(m.tipo === 'pedido') msg += ' (No cambia el stock.)';
   if(m.caja_id) msg += ' También se saca el movimiento de Caja.';
@@ -6272,6 +6384,7 @@ function pagoDeMovimiento(m, p){
 function abrirCambioMedio(i){
   if(rolActual !== 'admin') return;
   var m = db.caja[i]; if(!m) return;
+  if(movCajaCerrado(m)){ avisoCajaCerrada(); return; }
   medioIdx = i;
   document.getElementById('medio-info').textContent = m.fecha + ' · ' + (m.tipo === 'entrada' ? 'Entrada' : 'Salida') + ' $' + fmt(m.monto) + ' · ' + (m.desc || '') + ' · hoy figura como: ' + m.medio;
   document.getElementById('medio-nuevo').value = m.medio === 'Efectivo' ? 'Transferencia' : 'Efectivo';
@@ -6285,6 +6398,7 @@ function abrirCambioMedio(i){
 function confirmarCambioMedio(){
   if(rolActual !== 'admin') return;
   var m = db.caja[medioIdx]; if(!m) return;
+  if(movCajaCerrado(m)){ avisoCajaCerrada(); return; }
   var nuevo = document.getElementById('medio-nuevo').value;
   if(nuevo === m.medio){ cerrarModales(); return; }
   var viejo = m.medio, p = boletaDeMovimiento(m), g = pagoDeMovimiento(m, p);
@@ -6298,6 +6412,7 @@ function confirmarCambioMedio(){
 function eliminarMovimiento(idx){
   if(rolActual!=='admin'){ alert('No tenés permiso para eliminar movimientos de caja.'); return; }
   var mv=db.caja[idx];
+  if(mv&&movCajaCerrado(mv)){ avisoCajaCerrada(); return; }
   if(mv&&mv.pase){
     if(!confirm('¿Eliminar este pase entre medios? Se borran las dos partes (la salida y la entrada).'))return;
     db.caja=db.caja.filter(function(c){ return c!==mv && !(mv.pase_id && c.pase_id===mv.pase_id); }); renderCaja(); guardar().then(function(ok){ if(!ok) alert('No se pudo guardar en el servidor. No refresques la página; se reintenta solo.'); });

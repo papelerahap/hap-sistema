@@ -1174,7 +1174,7 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
 <div class="modal-backdrop" id="modal-cierrecaja">
   <div class="modal" style="max-width:460px">
     <h3>🔒 Cerrar caja</h3>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Contá lo que hay y dá el OK de cada medio. Si los dos coinciden con el sistema, la caja se cierra y esos días ya no se pueden modificar.</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Contá lo que hay y dá el OK de cada medio. Si los dos coinciden con el sistema, la caja se cierra y esos movimientos ya no se pueden modificar. Después podés seguir cargando y cerrar de nuevo.</div>
     <div class="form-group" style="margin-bottom:14px"><label>Cerrar hasta el día</label><input type="date" id="cc-fecha" onchange="ccCambio()"></div>
     <div style="border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;font-size:13px"><strong>💵 Efectivo</strong><span>Sistema: <strong id="cc-sis-ef">$0</strong></span></div>
@@ -4819,7 +4819,6 @@ function confirmarPago(){
   const monto=parseFloat(document.getElementById('pago-monto').value)||0;
   if(pagoEntrega&&!monto){ pagoEntrega=false; cerrarModales(); marcarEntregado(pagoIdx); return; }
   if(!monto||monto<=0){alert('Ingresá un monto mayor a cero');return;}
-  if(cajaHoyCerrada()){ avisoHoyCerrada(); return; }
   if(pagoIdx===null||pagoIdx===undefined) return;
   const p=db.presupuestos[pagoIdx];
   if(!p) return;
@@ -5058,7 +5057,6 @@ function cobroFormaCambio(){
   document.getElementById('cobro-mixto').style.display=(document.getElementById('cobro-forma').value==='Efectivo + Transferencia')?'block':'none';
 }
 function confirmarCobroTotal(){
-  if(cajaHoyCerrada()){ avisoHoyCerrada(); return; }
   if(cobroGrupo){ confirmarCobroGrupo(); return; }
   var idx=cobroIdx; if(idx===null||idx===undefined) return;
   var p=db.presupuestos[idx]; if(!p) return;
@@ -5200,7 +5198,6 @@ async function guardarMovimiento(){
   if(!desc){alert('Ingresá una descripción');return;}
   if(!db.caja)db.caja=[];
   const fechaVal=document.getElementById('mov-fecha').value;
-  if(fechaVal ? fechaVal<=cajaCerradaHasta() : cajaHoyCerrada()){ avisoCajaCerrada(); return; }
   db.caja.push({
     fecha: fechaVal ? new Date(fechaVal+'T12:00:00').toLocaleDateString('es-AR') : new Date().toLocaleDateString('es-AR'),
     tipo: document.getElementById('mov-tipo').value,
@@ -5213,12 +5210,22 @@ async function guardarMovimiento(){
 }
 // ---- CIERRE DE CAJA: se da el OK de efectivo y de transferencia; si coinciden con el sistema, el dia queda cerrado y no se modifica ----
 function cajaCerradaHasta(){ var m = ''; (db.cierres_caja || []).forEach(function(c){ if(c && c.fecha > m) m = c.fecha; }); return m; }
-function fechaArCerrada(f){ var h = cajaCerradaHasta(); if(!h) return false; var d = parseFechaAR(f); if(!d) return false; return fechaISO(d) <= h; }
-function movCajaCerrado(m){ return !!m && fechaArCerrada(m.fecha); }
-function cajaHoyCerrada(){ var h = cajaCerradaHasta(); return !!h && fechaISO(new Date()) <= h; }
+// un movimiento queda cerrado cuando entra en un cierre (se marca con cierre_caja); lo que se carga despues queda abierto hasta el proximo cierre
+function movCajaCerrado(m){ return !!m && !!m.cierre_caja; }
+function movsSinCerrarHasta(iso){ return (db.caja || []).filter(function(m){ var d = parseFechaAR(m.fecha); return !m.cierre_caja && d && fechaISO(d) <= iso; }); }
+// cierres hechos antes de que existiera la marca: se marcan sus movimientos (solo lo hace el administrador)
+function migrarCierresCaja(){
+  if(rolActual !== 'admin' || !(db.cierres_caja || []).length) return false;
+  var cambio = false;
+  db.cierres_caja.forEach(function(c){
+    if(c.marcado) return;
+    movsSinCerrarHasta(c.fecha).forEach(function(m){ m.cierre_caja = c.id; });
+    c.marcado = true; cambio = true;
+  });
+  return cambio;
+}
 function fmtFechaISO(iso){ var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : ''; }
-function avisoCajaCerrada(){ alert('Ese movimiento es de un día que ya está cerrado en Caja (hasta el ' + fmtFechaISO(cajaCerradaHasta()) + '). No se puede modificar.' + (esAdminReal() ? String.fromCharCode(10) + String.fromCharCode(10) + 'Si hace falta, reabrí el cierre desde Caja.' : '')); }
-function avisoHoyCerrada(){ alert('La caja de hoy ya está cerrada (hasta el ' + fmtFechaISO(cajaCerradaHasta()) + '), así que no se puede registrar un cobro con fecha de hoy.' + (esAdminReal() ? String.fromCharCode(10) + String.fromCharCode(10) + 'Reabrí el cierre desde Caja para cargarlo.' : '')); }
+function avisoCajaCerrada(){ alert('Ese movimiento ya fue cerrado en Caja y no se puede modificar.' + (esAdminReal() ? String.fromCharCode(10) + String.fromCharCode(10) + 'Si hace falta, reabrí el último cierre desde Caja.' : '')); }
 function saldosCajaHasta(iso){
   var ef = 0, tr = 0;
   (db.caja || []).forEach(function(m){
@@ -5254,7 +5261,8 @@ function ccConfirmar(m){
   var f = document.getElementById('cc-fecha').value;
   if(!f){ alert('Elegí hasta qué día cerrar'); return; }
   var hasta = cajaCerradaHasta();
-  if(f <= hasta){ alert('La caja ya está cerrada hasta el ' + fmtFechaISO(hasta) + '. Elegí un día posterior.'); return; }
+  if(f < hasta){ alert('La caja ya está cerrada hasta el ' + fmtFechaISO(hasta) + '. Elegí ese día o uno posterior.'); return; }
+  if(!movsSinCerrarHasta(f).length){ alert('No hay movimientos nuevos para cerrar hasta esa fecha.'); return; }
   var s = saldosCajaHasta(f);
   var val = parseCosto(document.getElementById('cc-' + m).value);
   var msg = document.getElementById('cc-msg-' + m);
@@ -5271,19 +5279,22 @@ function ccConfirmar(m){
   if(ccOk.ef && ccOk.tr) ccCerrar(f, s);
 }
 function ccCerrar(f, s){
-  if(!confirm('Efectivo y transferencia coinciden.' + String.fromCharCode(10) + String.fromCharCode(10) + '¿Cerrar la caja hasta el ' + fmtFechaISO(f) + '? Los movimientos de esos días ya no se van a poder modificar.')) return;
+  if(!confirm('Efectivo y transferencia coinciden.' + String.fromCharCode(10) + String.fromCharCode(10) + '¿Cerrar la caja hasta el ' + fmtFechaISO(f) + '? Los movimientos cargados hasta ahora ya no se van a poder modificar. Lo que cargues después queda abierto hasta el próximo cierre.')) return;
   if(!db.cierres_caja) db.cierres_caja = [];
-  db.cierres_caja.push({ id: 'cc' + Date.now() + Math.random().toString(36).slice(2, 5), fecha: f, efectivo: s.ef, transferencia: s.tr, creado: new Date().toISOString() });
+  var cid = 'cc' + Date.now() + Math.random().toString(36).slice(2, 5);
+  movsSinCerrarHasta(f).forEach(function(m){ m.cierre_caja = cid; });
+  db.cierres_caja.push({ id: cid, fecha: f, efectivo: s.ef, transferencia: s.tr, creado: new Date().toISOString(), marcado: true });
   registrarActividad('caja', 'Cerró la caja hasta el ' + fmtFechaISO(f), 'Efectivo $' + fmt(s.ef) + ' | Transferencia $' + fmt(s.tr));
   guardar().then(function(ok){ if(!ok) alert('El cierre quedó SOLO en esta computadora: no se pudo guardar en el servidor. No refresques la página; se reintenta solo.'); });
   cerrarModales(); renderCaja();
 }
 function reabrirCierreCaja(){
   if(!esAdminReal()) return;
-  var ult = null; (db.cierres_caja || []).forEach(function(c){ if(!ult || c.fecha > ult.fecha) ult = c; });
+  var ult = null; (db.cierres_caja || []).forEach(function(c){ if(!ult || String(c.creado || '') > String(ult.creado || '')) ult = c; });
   if(!ult) return;
   if(!confirm('¿Reabrir el cierre del ' + fmtFechaISO(ult.fecha) + '? Esos días van a poder modificarse otra vez.')) return;
   db.cierres_caja = db.cierres_caja.filter(function(c){ return c !== ult; });
+  (db.caja || []).forEach(function(m){ if(m.cierre_caja === ult.id) delete m.cierre_caja; });
   registrarActividad('caja', 'Reabrió el cierre de caja del ' + fmtFechaISO(ult.fecha), 'Efectivo $' + fmt(ult.efectivo) + ' | Transferencia $' + fmt(ult.transferencia));
   guardar().then(function(ok){ if(!ok) alert('No se pudo guardar en el servidor. No refresques la página; se reintenta solo.'); });
   renderCaja();
@@ -5302,7 +5313,6 @@ async function guardarPase(){
   const de=et?'Efectivo':'Transferencia', a=et?'Transferencia':'Efectivo';
   const nota=document.getElementById('pase-nota').value.trim();
   const fechaVal=document.getElementById('pase-fecha').value;
-  if(fechaVal ? fechaVal<=cajaCerradaHasta() : cajaHoyCerrada()){ avisoCajaCerrada(); return; }
   const fecha=fechaVal?new Date(fechaVal+'T12:00:00').toLocaleDateString('es-AR'):new Date().toLocaleDateString('es-AR');
   const desc='Pase de '+de+' a '+a+(nota?' - '+nota:'');
   if(!db.caja)db.caja=[];
@@ -5353,9 +5363,10 @@ function renderCaja(){
   document.getElementById('caja-efectivo').textContent='$'+fmt(efEnt-efSal);
   document.getElementById('caja-transf').textContent='$'+fmt(trEnt-trSal);
   document.getElementById('caja-total').textContent='$'+fmt((efEnt-efSal)+(trEnt-trSal));
+  if(migrarCierresCaja()) guardar();
   var cinfo=document.getElementById('caja-cierre-info'), hastaC=cajaCerradaHasta();
   if(cinfo){
-    if(hastaC){ cinfo.style.display='flex'; cinfo.innerHTML='🔒 <strong>Caja cerrada hasta el '+fmtFechaISO(hastaC)+'</strong> — los movimientos de esos días no se pueden modificar.'+(esAdminReal()?' <button class="btn btn-sm" onclick="reabrirCierreCaja()">↩️ Reabrir último cierre</button>':''); }
+    if(hastaC){ cinfo.style.display='flex'; cinfo.innerHTML='🔒 <strong>Caja cerrada hasta el '+fmtFechaISO(hastaC)+'</strong> — lo cerrado no se puede modificar; lo que cargues después queda abierto hasta el próximo cierre.'+(esAdminReal()?' <button class="btn btn-sm" onclick="reabrirCierreCaja()">↩️ Reabrir último cierre</button>':''); }
     else cinfo.style.display='none';
   }
   var bcc=document.getElementById('btn-cerrar-caja'); if(bcc) bcc.style.display=(rolActual==='admin')?'':'none';
@@ -6219,7 +6230,6 @@ function confirmarMovProv(){
   var monto = parseCosto(document.getElementById('pmov-monto').value);
   if(monto === null || monto <= 0){ alert('Ingresá un monto válido'); return; }
   var fecha = document.getElementById('pmov-fecha').value || fechaISO(new Date());
-  if(tipo === 'pago' && fecha <= cajaCerradaHasta()){ avisoCajaCerrada(); return; }
   var desc = document.getElementById('pmov-desc').value.trim();
   if(!db.prov_movs) db.prov_movs = [];
   var mov = { id: 'pv' + Date.now() + Math.random().toString(36).slice(2, 6), proveedor: cuentaProv, fecha: fecha, tipo: tipo === 'pago' ? 'pago' : 'pedido', monto: monto, desc: desc || (tipo === 'pago' ? 'Pago' : 'Deuda cargada'), creado: new Date().toISOString() };

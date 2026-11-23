@@ -1151,7 +1151,8 @@ tr.pg-del .pg-in { text-decoration: line-through; color: var(--text3); }
   <div class="modal" style="max-width:460px">
     <h3>🔒 Cerrar caja</h3>
     <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Contá lo que hay y dá el OK de cada medio. Si los dos coinciden con el sistema, la caja se cierra y esos movimientos ya no se pueden modificar. Después podés seguir cargando y cerrar de nuevo.</div>
-    <div class="form-group" style="margin-bottom:14px"><label>Cerrar hasta el día</label><input type="date" id="cc-fecha" onchange="ccCambio()"></div>
+    <div style="font-size:13px;margin-bottom:14px"><strong>Se cierra hasta el último movimiento cargado.</strong> Los movimientos que cargues después se pueden modificar hasta el próximo cierre.</div>
+    <input type="hidden" id="cc-fecha" value="9999-12-31">
     <div style="border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;font-size:13px"><strong>💵 Efectivo</strong><span>Sistema: <strong id="cc-sis-ef">$0</strong></span></div>
       <div style="display:flex;gap:8px;margin-top:8px"><input type="text" inputmode="decimal" id="cc-ef" placeholder="¿Cuánto hay en efectivo?" oninput="ccEditado('ef')" style="flex:1"><button class="btn btn-green" id="cc-btn-ef" onclick="ccConfirmar('ef')">OK</button></div>
@@ -5261,7 +5262,6 @@ function saldosCajaHasta(iso){
 var ccOk = { ef: false, tr: false };
 function abrirCierreCaja(){
   if(rolActual !== 'admin') return;
-  document.getElementById('cc-fecha').value = fechaISO(new Date());
   document.getElementById('cc-ef').value = ''; document.getElementById('cc-tr').value = '';
   ccOk = { ef: false, tr: false };
   ccRefrescar();
@@ -5281,11 +5281,8 @@ function ccRefrescar(){
   });
 }
 function ccConfirmar(m){
-  var f = document.getElementById('cc-fecha').value;
-  if(!f){ alert('Elegí hasta qué día cerrar'); return; }
-  var hasta = cajaCerradaHasta();
-  if(f < hasta){ alert('La caja ya está cerrada hasta el ' + fmtFechaISO(hasta) + '. Elegí ese día o uno posterior.'); return; }
-  if(!movsSinCerrarHasta(f).length){ alert('No hay movimientos nuevos para cerrar hasta esa fecha.'); return; }
+  var f = '9999-12-31'; // se cierra todo lo cargado hasta ahora, sin importar la fecha de cada movimiento
+  if(!movsSinCerrarHasta(f).length){ alert('No hay movimientos nuevos para cerrar desde el último cierre.'); return; }
   var s = saldosCajaHasta(f);
   var val = parseCosto(document.getElementById('cc-' + m).value);
   var msg = document.getElementById('cc-msg-' + m);
@@ -5302,12 +5299,13 @@ function ccConfirmar(m){
   if(ccOk.ef && ccOk.tr) ccCerrar(f, s);
 }
 function ccCerrar(f, s){
-  if(!confirm('Efectivo y transferencia coinciden.' + String.fromCharCode(10) + String.fromCharCode(10) + '¿Cerrar la caja hasta el ' + fmtFechaISO(f) + '? Los movimientos cargados hasta ahora ya no se van a poder modificar. Lo que cargues después queda abierto hasta el próximo cierre.')) return;
+  if(!confirm('Efectivo y transferencia coinciden.' + String.fromCharCode(10) + String.fromCharCode(10) + '¿Cerrar la caja hasta el último movimiento cargado? Los movimientos cargados hasta ahora ya no se van a poder modificar. Lo que cargues después queda abierto hasta el próximo cierre.')) return;
   if(!db.cierres_caja) db.cierres_caja = [];
   var cid = 'cc' + Date.now() + Math.random().toString(36).slice(2, 5);
+  var movsCerradosAhora = movsSinCerrarHasta(f).length;
   movsSinCerrarHasta(f).forEach(function(m){ m.cierre_caja = cid; });
-  db.cierres_caja.push({ id: cid, fecha: f, efectivo: s.ef, transferencia: s.tr, creado: new Date().toISOString(), marcado: true });
-  registrarActividad('caja', 'Cerró la caja hasta el ' + fmtFechaISO(f), 'Efectivo $' + fmt(s.ef) + ' | Transferencia $' + fmt(s.tr));
+  db.cierres_caja.push({ id: cid, efectivo: s.ef, transferencia: s.tr, creado: new Date().toISOString(), marcado: true, fecha: fechaISO(new Date()) });
+  registrarActividad('caja', 'Cerró la caja (' + movsCerradosAhora + ' movimientos)', 'Efectivo $' + fmt(s.ef) + ' | Transferencia $' + fmt(s.tr));
   guardar().then(function(ok){ if(!ok) alert('El cierre quedó SOLO en esta computadora: no se pudo guardar en el servidor. No refresques la página; se reintenta solo.'); });
   cerrarModales(); renderCaja();
 }
@@ -5389,7 +5387,8 @@ function renderCaja(){
   if(migrarCierresCaja()) guardar();
   var cinfo=document.getElementById('caja-cierre-info'), hastaC=cajaCerradaHasta();
   if(cinfo){
-    if(hastaC){ cinfo.style.display='flex'; cinfo.innerHTML='🔒 <strong>Caja cerrada hasta el '+fmtFechaISO(hastaC)+'</strong> — lo cerrado no se puede modificar; lo que cargues después queda abierto hasta el próximo cierre.'+(esAdminReal()?' <button class="btn btn-sm" onclick="reabrirCierreCaja()">↩️ Reabrir último cierre</button>':''); }
+    var ucc=null; (db.cierres_caja||[]).forEach(function(c){ if(!ucc || String(c.creado||'')>String(ucc.creado||'')) ucc=c; });
+    if(hastaC && ucc){ var dcc=ucc.creado?new Date(ucc.creado):null; cinfo.style.display='flex'; cinfo.innerHTML='🔒 <strong>Último cierre de caja: '+(dcc?dcc.toLocaleDateString('es-AR')+' '+dcc.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}):fmtFechaISO(hastaC))+'</strong> — lo cerrado no se puede modificar; lo que cargues después queda abierto hasta el próximo cierre.'+(esAdminReal()?' <button class="btn btn-sm" onclick="reabrirCierreCaja()">↩️ Reabrir último cierre</button>':''); }
     else cinfo.style.display='none';
   }
   var bcc=document.getElementById('btn-cerrar-caja'); if(bcc) bcc.style.display=(rolActual==='admin')?'':'none';

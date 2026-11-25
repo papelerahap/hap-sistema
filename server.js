@@ -2844,13 +2844,13 @@ function descontarStockAnteriores(){
   renderPresupuestos(); if(typeof renderProductos === 'function') renderProductos(); renderDashboard();
   alert('Listo: se descontó el stock de ' + pend.length + ' boletas.' + (negativos.length ? ' Quedaron con stock negativo: ' + negativos.slice(0, 10).join(', ') : ''));
 }
-let editPresIdx = null;
+let editPresIdx = null, editPresUid = '', editPresNum = null;
 let presClienteSnapshot = null;
 function editarPresupuesto(idx){
   var p = db.presupuestos[idx];
   if(!p) return;
   abrirModalPresupuesto();
-  editPresIdx = idx;
+  editPresIdx = idx; editPresUid = p.uid || ''; editPresNum = p.numero;
   presClienteSnapshot = null;
   document.getElementById('titulo-modal-pres').textContent = 'Editar boleta #' + p.numero;
   document.getElementById('btn-guardar-pres').textContent = 'Guardar cambios';
@@ -2886,8 +2886,9 @@ function editarPresupuesto(idx){
   calcTotalPres();
 }
 function guardarEdicionPresupuesto(lineas, subtotal, cliente, deuda){
-  var p = db.presupuestos[editPresIdx];
-  if(!p){ alert('No se encontró la boleta'); return; }
+  // la boleta se busca por su identidad (no por la posicion en la lista, que puede cambiar al actualizarse los datos)
+  var p = db.presupuestos.find(function(x){ return editPresUid ? x.uid === editPresUid : x.numero === editPresNum; });
+  if(!p){ alert('No se encontró la boleta #' + editPresNum + ': puede haberse borrado desde otra computadora. No se guardó nada.'); return; }
   var nuevoTotal = subtotal + deuda;
   var pagado = (p.pagos || []).reduce(function(s, pg){ return s + pg.monto; }, 0);
   if(pagado > 0 && Math.abs(nuevoTotal - p.total) > 0.005){
@@ -4582,21 +4583,31 @@ function renderEntrega(){
   var qEl=document.getElementById('entrega-buscar');
   var q=qEl?qEl.value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''):'';
   var lista=db.presupuestos.filter(function(p){
-    if(!p.impreso||p.entregado||p.estado==='Rechazado') return false;
+    if(p.entregado||p.estado==='Rechazado') return false;
+    if(!p.impreso && !q) return false; // las que no se imprimieron solo aparecen al buscar
     if(!q) return true;
     var txt=((p.cliente?p.cliente.nombre:'Consumidor final')+' '+p.numero).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
     return q.split(' ').every(function(w){ return txt.indexOf(w)>-1; });
   });
   lista.sort(function(a,b){ return String(a.fecha_impresion||'').localeCompare(String(b.fecha_impresion||'')); });
   document.getElementById('entrega-total').textContent=lista.length?(lista.length+' boleta'+(lista.length>1?'s':'')+' por entregar'+(rolActual==='admin'?' — Total: $'+fmt(lista.reduce(function(a,p){return a+(p.total||0);},0))+' · A cobrar: $'+fmt(lista.reduce(function(a,p){return a+Math.max(0,saldoPendienteBoleta(p));},0)):'')):'Nada pendiente de entrega';
-  if(!lista.length){ t.innerHTML='<tr class="empty-row"><td colspan="6">Sin boletas pendientes de entrega</td></tr>'; return; }
+  var hintE='';
+  if(q){
+    var yaE=db.presupuestos.filter(function(p){
+      if(!p.entregado) return false;
+      var txt=((p.cliente?p.cliente.nombre:'Consumidor final')+' '+p.numero).toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'');
+      return q.split(' ').every(function(w){ return txt.indexOf(w)>-1; });
+    }).slice(-5);
+    if(yaE.length) hintE='<tr><td colspan="6" style="font-size:12px;color:var(--text2);background:var(--amber-light)">Ya figuran como <strong>entregadas</strong> (no aparecen acá): '+yaE.map(function(p){ return '#'+p.numero+' '+(p.cliente?p.cliente.nombre:'Consumidor final')+(p.fecha_entrega?' ('+new Date(p.fecha_entrega).toLocaleDateString('es-AR')+')':''); }).join(' · ')+'. Para cargar un pago, buscala en Presupuestos o Deudores.</td></tr>';
+  }
+  if(!lista.length){ t.innerHTML='<tr class="empty-row"><td colspan="6">Sin boletas pendientes de entrega</td></tr>'+hintE; return; }
   t.innerHTML=lista.map(function(p){
     var i=db.presupuestos.indexOf(p);
     var pag=(p.pagos||[]).reduce(function(a,x){return a+x.monto;},0), sal=saldoPendienteBoleta(p);
     var imp=sal<=0.01?'<span class="badge badge-ok">Pagada</span>':(pag>0?'<span class="badge badge-low">Pagó $'+fmt(pag)+' · debe $'+fmt(sal)+'</span>':'<span class="badge badge-out">Debe $'+fmt(sal)+'</span>');
     return '<tr><td><strong>'+p.numero+'</strong></td>'+
       '<td style="font-size:12px">'+(p.fecha?new Date(p.fecha+'T12:00:00').toLocaleDateString('es-AR'):'')+'</td>'+
-      '<td><strong>'+(p.cliente?p.cliente.nombre:'Consumidor final')+'</strong></td>'+
+      '<td><strong>'+(p.cliente?p.cliente.nombre:'Consumidor final')+'</strong>'+(p.impreso?'':' <span class="badge badge-low">Sin imprimir</span>')+'</td>'+
       '<td><strong>$'+fmt(p.total)+'</strong></td>'+
       '<td>'+imp+'</td>'+
       '<td style="white-space:nowrap">'+
@@ -4606,7 +4617,7 @@ function renderEntrega(){
       (rolActual==='admin'?'<button class="btn btn-sm btn-danger" onclick="cancelarPedido('+i+')" title="Cancela el pedido: devuelve el stock y lo saca de la lista">❌ Cancelar pedido</button> ':'')+
       '<button class="btn btn-sm btn-primary" onclick="abrirEntrega('+i+')" title="Cargás cuánto pagó; si falta, pasa a Deudores; si pagó de más, queda a favor">📦 Entregado (cargar pago)</button> '+
       '</td></tr>';
-  }).join('');
+  }).join('')+hintE;
 }
 function cancelarPedido(idx){
   if(rolActual !== 'admin') return;
@@ -7128,6 +7139,7 @@ function renderActividad(){
 var versionVista = null, versionCand = null, versionTick = 0, pullAplicado = false, bootId = null;
 setInterval(async () => {
   if(!rolActual) return; // solo si está logueado
+  if(document.querySelector('.modal-backdrop.open')) return; // no cambiar los datos mientras hay una ventana abierta (se podian pisar boletas)
   if(guardandoEnServidor) return; // no interferir si se está guardando
   if(planillaSucia || listasSucia || pgSucia || csSucio || cgSucio) return; // no pisar una planilla de costos con cambios sin guardar
   if(snapSync !== null && armarDelta().hay){
@@ -7461,6 +7473,7 @@ function puedeEscribir(nivel, tabla){
   if(esAdminNivel(nivel)) return true;
   return TABLAS_TODOS.indexOf(tabla) > -1;
 }
+const CLAVES_SRV = { presupuestos: 'numero', caja: 'id', prov_movs: 'id', recordatorios: 'id', productos: 'id', clientes: 'id' };
 app.post('/api/db/delta', requerirAuth, async (req, res) => {
   try {
     if(String(req.headers['x-protocolo'] || '') !== PROTOCOLO) return res.status(426).json({ error: 'Hay una versión nueva del sistema. Recargá la página con Ctrl+Shift+R.', version: true });
@@ -7472,6 +7485,12 @@ app.post('/api/db/delta', requerirAuth, async (req, res) => {
       for(const t of Object.keys(tables)){
         let d = tables[t] || {};
         if(!puedeEscribir(nivel, t)){ ignoradas.push(t); continue; }
+        // una escritura "completa" de una tabla de registros nunca borra: solo agrega o actualiza (antes podia pisar boletas de otra computadora)
+        if(d.mode !== 'records' && CLAVES_SRV[t] && Array.isArray(d.valor)){
+          if(t === 'caja') cajaStampIds(d.valor); if(t === 'clientes') clientesStampIds(d.valor); if(t === 'productos') productosStampIds(d.valor);
+          const kk = CLAVES_SRV[t];
+          d = { mode: 'records', key: kk, upserts: d.valor.filter(r => r && r[kk] !== undefined && r[kk] !== null), deletes: [] };
+        }
         // los empleados que no son admin solo pueden AGREGAR a la caja, no borrar ni cambiar
         if(t === 'caja' && !admin){
           const actual = (await leerTabla('caja')) || []; cajaStampIds(actual);
